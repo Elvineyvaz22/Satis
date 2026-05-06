@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import db, { Sale } from '@/lib/db';
+import db, { Sale, generateSaleText } from '@/lib/db';
 
 // GET - Bütün satışları gətir
 export async function GET() {
@@ -11,7 +11,14 @@ export async function GET() {
       ORDER BY s.id DESC
       LIMIT 50
     `).all() as Sale[];
-    return NextResponse.json(sales);
+    
+    // Hər satışa sale_text əlavə et
+    const salesWithText = sales.map(s => ({
+      ...s,
+      sale_text: generateSaleText(s)
+    }));
+    
+    return NextResponse.json(salesWithText);
   } catch (error) {
     return NextResponse.json({ error: 'Xəta baş verdi' }, { status: 500 });
   }
@@ -51,17 +58,27 @@ export async function POST(request: NextRequest) {
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(date, customer_name, customer_phone, latitude || null, longitude || null, product_id, quantity, gift_quantity, total_amount, qr_data);
 
-    return NextResponse.json({
-      id: result.lastInsertRowid,
+    // Yeni satış obyekti yaradıb mətn generate et
+    const newSale: Sale = {
+      id: result.lastInsertRowid as number,
       date,
       customer_name,
       customer_phone,
-      product_name: product.name,
-      product_price: product.price,
+      latitude: latitude || null,
+      longitude: longitude || null,
+      product_id,
       quantity,
       gift_quantity,
       total_amount,
-      qr_data
+      qr_data,
+      created_at: new Date().toISOString(),
+      product_name: product.name,
+      product_price: product.price
+    };
+
+    return NextResponse.json({
+      ...newSale,
+      sale_text: generateSaleText(newSale)
     }, { status: 201 });
   } catch (error) {
     return NextResponse.json({ error: 'Xəta baş verdi' }, { status: 500 });

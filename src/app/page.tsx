@@ -15,6 +15,7 @@ interface SaleResult {
   quantity: number;
   gift_quantity: number;
   total_amount: number;
+  sale_text?: string;
 }
 
 export default function Home() {
@@ -227,7 +228,24 @@ export default function Home() {
           </div>
         </div>
 
-        <div className="text-center mt-6">
+        {result.sale_text && (
+          <div className={`${cardBg} rounded-2xl p-4 mt-6 border ${border}`}>
+            <p className={`text-xs font-semibold uppercase tracking-wide ${muted} mb-3`}>📋 Satış Məlumatı (Kuryer Üçün)</p>
+            <pre className={`text-sm ${text} whitespace-pre-wrap break-words font-mono bg-[#252540]/30 p-3 rounded-lg`}>{result.sale_text}</pre>
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(result.sale_text || '');
+                const tg = (window as any).Telegram?.WebApp;
+                if (tg?.hapticFeedback) tg.hapticFeedback.notification('success');
+              }}
+              className={`w-full mt-3 py-3 rounded-xl border ${border} ${text} text-sm font-semibold cursor-pointer active:scale-95 transition`}
+            >
+              📋 Mətni Kopyala
+            </button>
+          </div>
+        )}
+
+        <div className="text-center mt-4">
           <p className={`text-sm ${muted} mb-3`}>QR Kod - ID: #{result.id}</p>
           <div className={`${cardBg} rounded-2xl p-5 inline-block border ${border}`}>
             <div className="w-32 h-32 bg-gray-200 flex items-center justify-center rounded-lg">

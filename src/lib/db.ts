@@ -79,4 +79,35 @@ export interface Sale {
   created_at: string;
   product_name?: string;
   product_price?: number;
+  sale_text?: string;
+}
+
+// Satış mətn generatoru
+export function generateSaleText(sale: Sale): string {
+  const date = new Date(sale.created_at).toLocaleString('az-AZ', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+  
+  const location = sale.latitude && sale.longitude 
+    ? `📍 Lokasiya: https://maps.google.com/?q=${sale.latitude},${sale.longitude}` 
+    : '📍 Lokasiya: Yoxdur';
+  
+  const giftText = sale.gift_quantity > 0 ? `\n🎁 Hədiyyə: ${sale.gift_quantity} ədəd` : '';
+  
+  return `🍞 YENİ SİFARİŞ #${sale.id}
+
+📅 Tarix: ${date}
+👤 Müştəri: ${sale.customer_name}
+📱 Nömrə: ${sale.customer_phone || 'Yoxdur'}
+
+🍞 Məhsul: ${sale.product_name || 'Naməlum'}
+📦 Miqdar: ${sale.quantity} ədəd${giftText}
+💰 Ümumi: ${sale.total_amount.toFixed(2)} ₼
+
+${location}
+`;
 }
