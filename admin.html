@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="az">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>LəçinSatış - Admin Panel</title>
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+  <style>
+    :root {
+      --bg: #ffffff;
+      --card-bg: #f5f5f5;
+      --border: #e5e5e5;
+      --input-bg: #ffffff;
+      --text: #1f1f1f;
+      --accent: #ff9500;
+    }
+    .dark {
+      --bg: #0f0f1a;
+      --card-bg: #1a1a2e;
+      --border: #2d2d44;
+      --input-bg: #252540;
+      --text: #ffffff;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      min-height: 100vh;
+      padding: 16px;
+      background: var(--bg);
+      color: var(--text);
+      transition: all 0.3s;
+    }
+    .header { text-align: center; padding: 20px 0; }
+    .header-icon {
+      width: 64px; height: 64px;
+      background: linear-gradient(135deg, #ff9500, #ff5e00);
+      border-radius: 16px;
+      display: flex; align-items: center; justify-content: center;
+      margin: 0 auto 12px; font-size: 28px;
+    }
+    .header h1 { font-size: 24px; font-weight: 700; }
+    .header p { font-size: 13px; opacity: 0.6; margin-top: 4px; }
+    .nav { display: flex; gap: 8px; margin-bottom: 16px; }
+    .nav-btn {
+      flex: 1; padding: 14px; border-radius: 12px; border: none;
+      font-size: 14px; font-weight: 600; cursor: pointer;
+      background: var(--card-bg); color: var(--text);
+    }
+    .nav-btn.active { background: var(--accent); color: white; }
+    .card {
+      background: var(--card-bg);
+      border-radius: 20px;
+      padding: 20px;
+      border: 1px solid var(--border);
+    }
+    .card-title { font-size: 16px; font-weight: 700; margin-bottom: 16px; }
+    .form-group { margin-bottom: 14px; }
+    .form-label { font-size: 13px; font-weight: 500; margin-bottom: 6px; display: block; }
+    .form-input {
+      width: 100%; padding: 14px 16px;
+      border-radius: 12px; border: 1px solid var(--border);
+      font-size: 15px; background: var(--input-bg); color: var(--text);
+      outline: none;
+    }
+    .form-input:focus { border-color: var(--accent); }
+    .btn {
+      width: 100%; padding: 16px; border-radius: 14px;
+      border: none; font-size: 15px; font-weight: 600;
+      cursor: pointer; display: flex; align-items: center;
+      justify-content: center; gap: 8px;
+    }
+    .btn-primary { background: linear-gradient(135deg, #ff9500, #ff5e00); color: white; }
+    .btn-danger { background: #ff3b30; color: white; }
+    .btn-success { background: #34c759; color: white; }
+    .product-item {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 14px; background: var(--input-bg);
+      border-radius: 12px; margin-bottom: 10px; border: 1px solid var(--border);
+    }
+    .product-info { flex: 1; }
+    .product-name { font-weight: 600; font-size: 15px; }
+    .product-price { font-size: 13px; opacity: 0.6; margin-top: 2px; }
+    .product-actions { display: flex; gap: 8px; }
+    .product-actions button {
+      padding: 8px 14px; border-radius: 8px; border: none;
+      font-size: 12px; font-weight: 600; cursor: pointer;
+    }
+    .edit-btn { background: var(--accent); color: white; }
+    .delete-btn { background: #ff3b30; color: white; }
+    .sales-item {
+      padding: 14px; background: var(--input-bg);
+      border-radius: 12px; margin-bottom: 10px; border: 1px solid var(--border);
+    }
+    .sales-customer { font-weight: 600; font-size: 15px; }
+    .sales-details { font-size: 12px; opacity: 0.6; margin-top: 4px; }
+    .sales-total { color: var(--accent); font-weight: 700; margin-top: 6px; }
+    .sales-qr { margin-top: 10px; }
+    .sales-qr canvas { border-radius: 8px; }
+    .error-msg { background: #ff3b30; color: white; padding: 12px 16px; border-radius: 10px; font-size: 13px; margin-bottom: 12px; }
+    .success-msg { background: #34c759; color: white; padding: 12px 16px; border-radius: 10px; font-size: 13px; margin-bottom: 12px; }
+    .spinner { width: 20px; height: 20px; border: 2px solid rgba(255,255,255,0.3); border-top-color: white; border-radius: 50%; animation: spin 0.8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .empty { text-align: center; padding: 40px; opacity: 0.5; }
+    .tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+    .tab { flex: 1; padding: 12px; border-radius: 10px; border: 1px solid var(--border); background: var(--card-bg); font-size: 13px; font-weight: 600; cursor: pointer; text-align: center; }
+    .tab.active { background: var(--accent); color: white; border-color: var(--accent); }
+    #products-tab, #sales-tab, #add-product-tab { display: none; }
+    #products-tab.active, #sales-tab.active, #add-product-tab.active { display: block; }
+  </style>
+</head>
+<body class="light">
+  <div class="header">
+    <div class="header-icon">⚙️</div>
+    <h1>Admin Panel</h1>
+    <p>LəçinSatış İdarəetmə</p>
+  </div>
+
+  <div class="server-config">
+    <div class="form-group">
+      <label class="form-label">API Server Ünvanı</label>
+      <input type="url" id="server-url" class="form-input" placeholder="http://45.142.212.71:8000">
+      <button class="btn btn-primary" style="margin-top:8px" onclick="saveServerUrl()">✅ Saxla və Yenilə</button>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" onclick="showTab('products')">📦 Məhsullar</button>
+    <button class="tab" onclick="showTab('add-product')">➕ Yeni Məhsul</button>
+    <button class="tab" onclick="showTab('sales')">📊 Satışlar</button>
+    <button class="tab" onclick="showTab('stats')">📈 Statistik</button>
+  </div>
+
+  <div id="add-product-tab" class="card">
+    <div class="card-title">➕ Yeni Məhsul Əlavə Et</div>
+    <div id="product-msg"></div>
+    <div class="form-group">
+      <label class="form-label">Məhsul Adı</label>
+      <input type="text" id="product-name" class="form-input" placeholder="Məsələn: Çörək (Sum)">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Qiymət (₼)</label>
+      <input type="number" id="product-price" class="form-input" placeholder="1.50" step="0.01" min="0">
+    </div>
+    <button id="add-product-btn" class="btn btn-primary" onclick="addProduct()">
+      ✅ Məhsul Əlavə Et
+    </button>
+  </div>
+
+  <div id="products-tab" class="card">
+    <div class="card-title">📦 Məhsullar Siyahısı</div>
+    <div id="products-list"></div>
+  </div>
+
+  <div id="sales-tab" class="card">
+    <div class="card-title">📊 Son Satışlar</div>
+    <div id="sales-list"></div>
+  </div>
+
+  <div id="stats-tab" class="card">
+    <div class="card-title">📈 Günlük Statistik</div>
+    <div id="stats-content"></div>
+  </div>
+
+  <script>
+    const isDark = false;
+    document.body.classList.toggle('dark', isDark);
+
+    let products = [];
+    let sales = [];
+    let API_BASE = localStorage.getItem('lacinsatis_api_url') || '';  // Vercel üçün boş (eyni domain)
+
+    // Server URL-i yüklə
+    document.getElementById('server-url').value = API_BASE;
+
+    function saveServerUrl() {
+      const url = document.getElementById('server-url').value.trim();
+      if (url) {
+        API_BASE = url.replace(/\/$/, '');
+        localStorage.setItem('lacinsatis_api_url', API_BASE);
+        loadAllData();
+        showMsg('product-msg', 'Server yeniləndi!', 'success');
+      }
+    }
+
+    function showTab(tab) {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('[id$="-tab"]').forEach(t => t.classList.remove('active'));
+      document.getElementById(`${tab}-tab`).classList.add('active');
+      event.target.classList.add('active');
+      if (tab === 'stats') loadStats();
+    }
+
+    function showMsg(id, msg, type) {
+      const el = document.getElementById(id);
+      el.className = type === 'error' ? 'error-msg' : 'success-msg';
+      el.textContent = msg;
+      el.style.display = 'block';
+      setTimeout(() => el.style.display = 'none', 3000);
+    }
+
+    async function loadAllData() {
+      loadProducts();
+      loadSales();
+    }
+
+    async function loadProducts() {
+      try {
+        const res = await fetch(`${API_BASE}/api/products`);
+        products = await res.json();
+        renderProducts();
+      } catch (err) {
+        document.getElementById('products-list').innerHTML = '<div class="empty">Bağlantı xətası - Server ayarlarını yoxlayın</div>';
+      }
+    }
+
+    function renderProducts() {
+      const list = document.getElementById('products-list');
+      if (products.length === 0) {
+        list.innerHTML = '<div class="empty">Məhsul yoxdur</div>';
+        return;
+      }
+      list.innerHTML = products.map(p => `
+        <div class="product-item">
+          <div class="product-info">
+            <div class="product-name">${p.name}</div>
+            <div class="product-price">${p.price} ₼</div>
+          </div>
+          <div class="product-actions">
+            <button class="delete-btn" onclick="deleteProduct(${p.id})">🗑️ Sil</button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    async function addProduct() {
+      const name = document.getElementById('product-name').value.trim();
+      const price = parseFloat(document.getElementById('product-price').value);
+
+      if (!name || !price) {
+        showMsg('product-msg', 'Bütün sahələri doldurun!', 'error');
+        return;
+      }
+
+      const btn = document.getElementById('add-product-btn');
+      btn.disabled = true;
+      btn.innerHTML = '<div class="spinner"></div>';
+
+      try {
+        const res = await fetch(`${API_BASE}/api/products`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, price })
+        });
+        
+        if (res.ok) {
+          showMsg('product-msg', 'Məhsul uğurla əlavə edildi!', 'success');
+          document.getElementById('product-name').value = '';
+          document.getElementById('product-price').value = '';
+          loadProducts();
+        } else {
+          showMsg('product-msg', 'Xəta baş verdi', 'error');
+        }
+      } catch (err) {
+        showMsg('product-msg', 'Bağlantı xətası', 'error');
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '✅ Məhsul Əlavə Et';
+      }
+    }
+
+    async function deleteProduct(id) {
+      if (!confirm('Bu məhsulu silmək istəyirsiniz?')) return;
+      
+      try {
+        await fetch(`${API_BASE}/api/products/${id}`, { method: 'DELETE' });
+        loadProducts();
+      } catch (err) {
+        alert('Xəta baş verdi');
+      }
+    }
+
+    async function loadSales() {
+      try {
+        const res = await fetch(`${API_BASE}/api/sales`);
+        sales = await res.json();
+        renderSales();
+      } catch (err) {
+        document.getElementById('sales-list').innerHTML = '<div class="empty">Bağlantı xətası</div>';
+      }
+    }
+
+    function renderSales() {
+      const list = document.getElementById('sales-list');
+      if (sales.length === 0) {
+        list.innerHTML = '<div class="empty">Satış yoxdur</div>';
+        return;
+      }
+      list.innerHTML = sales.map(s => `
+        <div class="sales-item">
+          <div class="sales-customer">${s.customer_name}</div>
+          <div class="sales-details">${s.product_name} • ${s.quantity} ədəd • ${s.date}</div>
+          <div class="sales-total">${s.total_amount} ₼</div>
+          <div class="sales-qr"><canvas id="qr-${s.id}"></canvas></div>
+        </div>
+      `).join('');
+      
+      sales.forEach(s => {
+        QRCode.toCanvas(document.getElementById(`qr-${s.id}`), `${API_BASE}/api/sales/${s.id}`, { width: 80 });
+      });
+    }
+
+    async function loadStats() {
+      const statsDiv = document.getElementById('stats-content');
+      if (sales.length === 0) {
+        statsDiv.innerHTML = '<div class="empty">Satış məlumatı yoxdur</div>';
+        return;
+      }
+      
+      const totalSales = sales.length;
+      const totalAmount = sales.reduce((sum, s) => sum + s.total_amount, 0);
+      const today = new Date().toISOString().split('T')[0];
+      const todaySales = sales.filter(s => s.date === today);
+      const todayAmount = todaySales.reduce((sum, s) => sum + s.total_amount, 0);
+      const totalQty = sales.reduce((sum, s) => sum + s.quantity, 0);
+      
+      statsDiv.innerHTML = `
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div class="product-item" style="text-align:center">
+            <div style="font-size:28px;font-weight:700;color:#ff9500">${totalSales}</div>
+            <div style="font-size:12px;opacity:0.6">Ümumi Satış</div>
+          </div>
+          <div class="product-item" style="text-align:center">
+            <div style="font-size:28px;font-weight:700;color:#34c759">${totalAmount.toFixed(2)} ₼</div>
+            <div style="font-size:12px;opacity:0.6">Ümumi Gəlir</div>
+          </div>
+          <div class="product-item" style="text-align:center">
+            <div style="font-size:28px;font-weight:700;color:#007aff">${todaySales.length}</div>
+            <div style="font-size:12px;opacity:0.6">Bu Günün Satışı</div>
+          </div>
+          <div class="product-item" style="text-align:center">
+            <div style="font-size:28px;font-weight:700;color:#ff3b30">${todayAmount.toFixed(2)} ₼</div>
+            <div style="font-size:12px;opacity:0.6">Bu Günün Gəliri</div>
+          </div>
+        </div>
+        <div class="product-item" style="margin-top:12px;text-align:center">
+          <div style="font-size:24px;font-weight:700">${totalQty} ədəd</div>
+          <div style="font-size:12px;opacity:0.6">Ümumi Satılan Məhsul</div>
+        </div>
+      `;
+    }
+
+    // Load data
+    loadAllData();
+  </script>
+</body>
+</html>

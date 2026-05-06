@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="az">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>LəçinSatış</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+  <style>
+    :root {
+      --bg: #ffffff;
+      --card-bg: #f5f5f5;
+      --border: #e5e5e5;
+      --input-bg: #ffffff;
+      --text: #1f1f1f;
+    }
+    .dark {
+      --bg: #0f0f1a;
+      --card-bg: #1a1a2e;
+      --border: #2d2d44;
+      --input-bg: #252540;
+      --text: #ffffff;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      min-height: 100vh;
+      padding: 16px;
+      padding-bottom: 100px;
+      background: var(--bg);
+      color: var(--text);
+      transition: all 0.3s;
+    }
+    .header { text-align: center; padding: 20px 0; }
+    .header-icon {
+      width: 64px; height: 64px;
+      background: linear-gradient(135deg, #ff9500, #ff5e00);
+      border-radius: 16px;
+      display: flex; align-items: center; justify-content: center;
+      margin: 0 auto 12px; font-size: 28px;
+    }
+    .header h1 { font-size: 24px; font-weight: 700; }
+    .header p { font-size: 13px; opacity: 0.6; margin-top: 4px; }
+    .card {
+      background: var(--card-bg);
+      border-radius: 20px;
+      padding: 20px;
+      margin-top: 16px;
+      border: 1px solid var(--border);
+    }
+    .section-title {
+      font-size: 11px; font-weight: 600;
+      text-transform: uppercase; letter-spacing: 0.5px;
+      opacity: 0.5; margin-bottom: 12px;
+    }
+    .form-group { margin-bottom: 16px; }
+    .form-label { font-size: 13px; font-weight: 500; margin-bottom: 6px; display: block; opacity: 0.8; }
+    .form-input {
+      width: 100%; padding: 14px 16px;
+      border-radius: 12px; border: 1px solid var(--border);
+      font-size: 15px; background: var(--input-bg); color: var(--text);
+      outline: none;
+    }
+    .form-input:focus { border-color: #ff9500; }
+    .form-input::placeholder { opacity: 0.4; }
+    .btn {
+      width: 100%; padding: 16px; border-radius: 14px;
+      border: none; font-size: 15px; font-weight: 600;
+      cursor: pointer; display: flex; align-items: center;
+      justify-content: center; gap: 8px;
+    }
+    .btn-primary { background: linear-gradient(135deg, #ff9500, #ff5e00); color: white; }
+    .btn-location { background: linear-gradient(135deg, #007aff, #5856d6); color: white; }
+    .btn-green { background: linear-gradient(135deg, #34c759, #30d158); color: white; }
+    .total-box {
+      background: linear-gradient(135deg, #ff9500, #ff5e00);
+      border-radius: 14px; padding: 16px; color: white;
+      display: flex; justify-content: space-between; align-items: center; margin-top: 16px;
+    }
+    .total-label { opacity: 0.9; font-size: 13px; }
+    .total-amount { font-size: 24px; font-weight: 700; }
+    .result-icon {
+      width: 80px; height: 80px;
+      background: linear-gradient(135deg, #34c759, #30d158);
+      border-radius: 50%; display: flex; align-items: center; justify-content: center;
+      margin: 0 auto 20px; font-size: 36px;
+    }
+    .result-title { font-size: 22px; font-weight: 700; text-align: center; margin-bottom: 6px; }
+    .result-subtitle { font-size: 14px; opacity: 0.6; text-align: center; margin-bottom: 20px; }
+    .result-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--border); }
+    .result-row:last-child { border-bottom: none; padding-top: 12px; }
+    .result-label { opacity: 0.6; font-size: 13px; }
+    .result-value { font-weight: 600; font-size: 14px; }
+    .result-total { color: #ff9500; font-size: 18px; }
+    .qr-container { background: white; border-radius: 16px; padding: 20px; display: inline-block; margin: 16px 0; }
+    .qr-hint { font-size: 12px; opacity: 0.5; margin-top: 12px; text-align: center; }
+    .error-msg { background: #ff3b30; color: white; padding: 12px 16px; border-radius: 10px; font-size: 13px; margin-bottom: 12px; }
+    .spinner { width: 20px; height: 20px; border: 2px solid rgba(255,255,255,0.3); border-top-color: white; border-radius: 50%; animation: spin 0.8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .divider { height: 1px; background: var(--border); margin: 20px 0; }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    #result-view { display: none; }
+    #form-view { display: block; }
+  </style>
+</head>
+<body class="light">
+  <div class="header">
+    <div class="header-icon">🍞</div>
+    <h1>LəçinSatış</h1>
+    <p>Çörək Satış və Logistika</p>
+  </div>
+
+  <div id="form-view" class="card">
+    <div id="error-msg" class="error-msg" style="display:none;"></div>
+
+    <div class="form-group">
+      <label class="form-label">📅 Tarix</label>
+      <input type="date" id="date-input" class="form-input">
+    </div>
+
+    <div class="divider"></div>
+    <div class="section-title">Müştəri Məlumatları</div>
+
+    <div class="form-group">
+      <label class="form-label">Müştərinin Adı *</label>
+      <input type="text" id="customer-name" class="form-input" placeholder="Məsələn: Kral Dönər">
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Mobil Nömrə</label>
+      <input type="tel" id="customer-phone" class="form-input" placeholder="050 123 45 67">
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">📍 Kuryer Lokasiyası</label>
+      <button id="location-btn" class="btn btn-location" onclick="getLocation()">
+        📍 Lokasiyanı Göndər
+      </button>
+      <div id="location-text" style="font-size:11px;opacity:0.5;margin-top:8px;text-align:center;display:none;"></div>
+    </div>
+
+    <div class="divider"></div>
+    <div class="section-title">Məhsul Detalları</div>
+
+    <div class="form-group">
+      <label class="form-label">Məhsul Seçin *</label>
+      <select id="product-select" class="form-input" onchange="updateTotal()">
+        <option value="">-- Məhsul seçin --</option>
+      </select>
+    </div>
+
+    <div class="grid-2">
+      <div class="form-group">
+        <label class="form-label">Miqdar *</label>
+        <input type="number" id="quantity" class="form-input" value="1" min="1" onchange="updateTotal()" style="text-align:center;font-size:18px;font-weight:600;">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Hədiyyə Miqdarı</label>
+        <input type="number" id="gift-quantity" class="form-input" value="0" min="0" style="text-align:center;font-size:18px;font-weight:600;">
+      </div>
+    </div>
+
+    <div id="total-box" class="total-box" style="display:none;">
+      <div>
+        <div class="total-label">Cəm Məbləğ</div>
+        <div id="total-calc" style="font-size:11px;opacity:0.8;margin-top:4px;"></div>
+      </div>
+      <div id="total-amount" class="total-amount">0 ₼</div>
+    </div>
+
+    <button id="submit-btn" class="btn btn-primary" style="margin-top:20px;" onclick="submitSale()">
+      🚀 Göndər
+    </button>
+  </div>
+
+  <div id="result-view" class="card">
+    <div style="text-align:center;">
+      <div class="result-icon">✓</div>
+      <div class="result-title">Uğurlu Əməliyyat!</div>
+      <div class="result-subtitle">Satış qeydə alındı</div>
+    </div>
+
+    <div id="result-details" class="result-row" style="display:flex;flex-direction:column;border:1px solid var(--border);border-radius:16px;padding:16px;margin-bottom:20px;">
+    </div>
+
+    <div style="text-align:center;">
+      <div class="qr-container">
+        <canvas id="qr-canvas"></canvas>
+      </div>
+      <div class="qr-hint">Skan edərək məlumatları görün</div>
+    </div>
+
+    <button class="btn btn-primary" style="margin-top:20px;" onclick="resetForm()">
+      Yeni Satış
+    </button>
+  </div>
+
+  <script>
+    const tg = window.Telegram?.WebApp;
+    let products = [];
+    let location = null;
+
+    // Dark mode
+    if (tg?.colorScheme === 'dark') {
+      document.body.classList.add('dark');
+    }
+
+    // Initialize
+    document.addEventListener('DOMContentLoaded', () => {
+      if (tg) {
+        tg.ready();
+        tg.expand();
+      }
+      document.getElementById('date-input').value = new Date().toISOString().split('T')[0];
+      fetchProducts();
+    });
+
+    async function fetchProducts() {
+      try {
+        const res = await fetch('/api/products');
+        products = await res.json();
+        const select = document.getElementById('product-select');
+        products.forEach(p => {
+          const opt = document.createElement('option');
+          opt.value = p.id;
+          opt.textContent = `${p.name} - ${p.price} ₼`;
+          select.appendChild(opt);
+        });
+      } catch (err) {
+        showError('Məhsullar yüklənə bilmədi');
+      }
+    }
+
+    function getLocation() {
+      const btn = document.getElementById('location-btn');
+      btn.innerHTML = '<div class="spinner"></div> Gözləyin...';
+      
+      if (tg?.locationManager) {
+        tg.locationManager.getLocation((loc) => {
+          location = { lat: loc.latitude, lon: loc.longitude };
+          finishLocation();
+        });
+      } else if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            location = { lat: pos.coords.latitude, lon: pos.coords.longitude };
+            finishLocation();
+          },
+          () => finishLocation()
+        );
+      } else {
+        finishLocation();
+      }
+    }
+
+    function finishLocation() {
+      const btn = document.getElementById('location-btn');
+      const text = document.getElementById('location-text');
+      if (location) {
+        btn.innerHTML = '✓ Lokasiya Götürüldü';
+        text.style.display = 'block';
+        text.textContent = `${location.lat.toFixed(6)}, ${location.lon.toFixed(6)}`;
+      } else {
+        btn.innerHTML = '📍 Lokasiyanı Göndər';
+      }
+    }
+
+    function updateTotal() {
+      const select = document.getElementById('product-select');
+      const qty = parseInt(document.getElementById('quantity').value) || 0;
+      const product = products.find(p => p.id === parseInt(select.value));
+      
+      const totalBox = document.getElementById('total-box');
+      if (product && qty > 0) {
+        totalBox.style.display = 'flex';
+        document.getElementById('total-amount').textContent = `${product.price * qty} ₼`;
+        document.getElementById('total-calc').textContent = `${qty} × ${product.price} ₼`;
+      } else {
+        totalBox.style.display = 'none';
+      }
+    }
+
+    function showError(msg) {
+      const el = document.getElementById('error-msg');
+      el.textContent = msg;
+      el.style.display = 'block';
+      setTimeout(() => el.style.display = 'none', 3000);
+    }
+
+    async function submitSale() {
+      const customerName = document.getElementById('customer-name').value.trim();
+      const productId = document.getElementById('product-select').value;
+      const quantity = parseInt(document.getElementById('quantity').value);
+      const giftQuantity = parseInt(document.getElementById('gift-quantity').value) || 0;
+
+      if (!customerName || !productId || !quantity) {
+        showError('Bütün sahələri doldurun!');
+        return;
+      }
+
+      const btn = document.getElementById('submit-btn');
+      btn.disabled = true;
+      btn.innerHTML = '<div class="spinner"></div> Göndərilir...';
+
+      try {
+        const res = await fetch('/api/sales', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            date: document.getElementById('date-input').value,
+            customer_name: customerName,
+            customer_phone: document.getElementById('customer-phone').value,
+            latitude: location?.lat || null,
+            longitude: location?.lon || null,
+            product_id: parseInt(productId),
+            quantity: quantity,
+            gift_quantity: giftQuantity
+          })
+        });
+
+        if (!res.ok) throw new Error('Xəta');
+        const data = await res.json();
+        
+        if (tg?.hapticFeedback) tg.hapticFeedback.notification('success');
+        showResult(data);
+      } catch (err) {
+        showError('Xəta baş verdi. Yenidən cəhd edin.');
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '🚀 Göndər';
+      }
+    }
+
+    function showResult(data) {
+      document.getElementById('form-view').style.display = 'none';
+      document.getElementById('result-view').style.display = 'block';
+
+      const details = document.getElementById('result-details');
+      details.innerHTML = `
+        <div class="result-row"><span class="result-label">Müştəri</span><span class="result-value">${data.customer_name}</span></div>
+        <div class="result-row"><span class="result-label">Məhsul</span><span class="result-value">${data.product_name}</span></div>
+        <div class="result-row"><span class="result-label">Miqdar</span><span class="result-value">${data.quantity} ədəd</span></div>
+        <div class="result-row"><span class="result-label">Hədiyyə</span><span class="result-value">${data.gift_quantity} ədəd</span></div>
+        <div class="result-row"><span class="result-label">Cəm Məbləğ</span><span class="result-value result-total">${data.total_amount} ₼</span></div>
+      `;
+
+      const baseUrl = window.location.origin;
+      QRCode.toCanvas(document.getElementById('qr-canvas'), `${baseUrl}/api/sales/${data.id}`, { width: 160 });
+    }
+
+    function resetForm() {
+      document.getElementById('form-view').style.display = 'block';
+      document.getElementById('result-view').style.display = 'none';
+      document.getElementById('customer-name').value = '';
+      document.getElementById('customer-phone').value = '';
+      document.getElementById('product-select').value = '';
+      document.getElementById('quantity').value = '1';
+      document.getElementById('gift-quantity').value = '0';
+      document.getElementById('total-box').style.display = 'none';
+      location = null;
+      document.getElementById('location-btn').innerHTML = '📍 Lokasiyanı Göndər';
+      document.getElementById('location-text').style.display = 'none';
+    }
+  </script>
+</body>
+</html>
