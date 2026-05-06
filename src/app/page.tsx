@@ -18,6 +18,7 @@ interface SaleResult {
 }
 
 export default function Home() {
+  const [sdkReady, setSdkReady] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
   const [products, setProducts] = useState<Product[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<number | ''>('');
@@ -31,18 +32,40 @@ export default function Home() {
   const [showResult, setShowResult] = useState(false);
   const [result, setResult] = useState<SaleResult | null>(null);
   const [error, setError] = useState('');
+  const [locationLoading, setLocationLoading] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
+  // Check if Telegram SDK is loaded
   useEffect(() => {
-    const tg = (window as any).Telegram?.WebApp;
-    if (tg) {
-      tg.ready();
-      tg.expand();
-      setDarkMode(tg.colorScheme === 'dark');
-    }
-    setDate(new Date().toISOString().split('T')[0]);
-    fetchProducts();
+    const checkTelegram = setInterval(() => {
+      if (window.Telegram?.WebApp) {
+        clearInterval(checkTelegram);
+        const tg = window.Telegram.WebApp;
+        tg.ready();
+        tg.expand();
+        setDarkMode(tg.colorScheme === 'dark');
+        setSdkReady(true);
+      }
+    }, 100);
+
+    // Fallback: if not in Telegram, still show the app
+    const fallbackTimer = setTimeout(() => {
+      clearInterval(checkTelegram);
+      setSdkReady(true);
+    }, 3000);
+
+    return () => {
+      clearInterval(checkTelegram);
+      clearTimeout(fallbackTimer);
+    };
   }, []);
+
+  useEffect(() => {
+    if (sdkReady) {
+      setDate(new Date().toISOString().split('T')[0]);
+      fetchProducts();
+    }
+  }, [sdkReady]);
 
   async function fetchProducts() {
     try {
@@ -54,17 +77,28 @@ export default function Home() {
     }
   }
 
-  async function getLocation() {
-    const tg = (window as any).Telegram?.WebApp;
+  function getLocation() {
+    setLocationLoading(true);
+    
+    const tg = window.Telegram?.WebApp;
     if (tg?.locationManager) {
       tg.locationManager.getLocation((loc: any) => {
         setLocation({ lat: loc.latitude, lon: loc.longitude });
+        setLocationLoading(false);
+        if (tg.hapticFeedback) tg.hapticFeedback.impact('light');
       });
     } else if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
-        (pos) => setLocation({ lat: pos.coords.latitude, lon: pos.coords.longitude }),
-        () => {}
+        (pos) => {
+          setLocation({ lat: pos.coords.latitude, lon: pos.coords.longitude });
+          setLocationLoading(false);
+        },
+        () => {
+          setLocationLoading(false);
+        }
       );
+    } else {
+      setLocationLoading(false);
     }
   }
 
@@ -105,22 +139,17 @@ export default function Home() {
       setResult(data);
       setShowResult(true);
 
-      const tg = (window as any).Telegram?.WebApp;
+      const tg = window.Telegram?.WebApp;
       if (tg?.hapticFeedback) tg.hapticFeedback.notification('success');
       
+      // Generate QR Code
       setTimeout(() => {
         const canvas = canvasRef.current;
-        if (canvas) {
-          const ctx = canvas.getContext('2d');
-          if (ctx) {
-            const QRCode = (window as any).QRCode;
-            if (QRCode) {
-              const baseUrl = window.location.origin;
-              QRCode.toCanvas(canvas, `${baseUrl}/api/sales/${data.id}`, { width: 160 });
-            }
-          }
+        if (canvas && (window as any).QRCode) {
+          const baseUrl = window.location.origin;
+          (window as any).QRCode.toCanvas(canvas, `${baseUrl}/api/sales/${data.id}`, { width: 160 });
         }
-      }, 100);
+      }, 200);
     } catch {
       setError('Xəta baş verdi. Yenidən cəhd edin.');
     } finally {
@@ -137,6 +166,20 @@ export default function Home() {
     setQuantity(1);
     setGiftQuantity(0);
     setLocation(null);
+  }
+
+  // Show loading while Telegram SDK initializes
+  if (!sdkReady) {
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-16 h-16 bg-gradient-to-br from-orange-500 to-orange-400 rounded-2xl flex items-center justify-center mx-auto mb-4 text-3xl animate-pulse">
+            🍞
+          </div>
+          <p className="text-gray-500">Yüklənir...</p>
+        </div>
+      </div>
+    );
   }
 
   const bg = darkMode ? 'bg-[#0f0f1a]' : 'bg-white';
@@ -192,7 +235,7 @@ export default function Home() {
 
         <button
           onClick={resetForm}
-          className="w-full bg-gradient-to-r from-orange-500 to-orange-400 text-white font-semibold py-4 rounded-2xl mt-6 active:scale-95 transition"
+          className="w-full bg-gradient-to-r from-orange-500 to-orange-400 text-white font-semibold py-4 rounded-2xl mt-6 active:scale-95 transition cursor-pointer"
         >
           Yeni Satış
         </button>
@@ -222,7 +265,7 @@ export default function Home() {
           type="date"
           value={date}
           onChange={e => setDate(e.target.value)}
-          className={`w-full p-4 rounded-xl border ${border} ${inputBg} ${text} text-base`}
+          className={`w-full p-4 rounded-xl border ${border} ${inputBg} ${text} text-base cursor-pointer`}
         />
 
         <div className="h-px bg-[#e5e5e5] my-5" />
@@ -235,7 +278,7 @@ export default function Home() {
             placeholder="Məsələn: Kral Dönər"
             value={customerName}
             onChange={e => setCustomerName(e.target.value)}
-            className={`w-full p-4 rounded-xl border ${border} ${inputBg} ${text}`}
+            className={`w-full p-4 rounded-xl border ${border} ${inputBg} ${text} cursor-text`}
           />
         </div>
 
@@ -246,7 +289,7 @@ export default function Home() {
             placeholder="050 123 45 67"
             value={customerPhone}
             onChange={e => setCustomerPhone(e.target.value)}
-            className={`w-full p-4 rounded-xl border ${border} ${inputBg} ${text}`}
+            className={`w-full p-4 rounded-xl border ${border} ${inputBg} ${text} cursor-text`}
           />
         </div>
 
@@ -254,9 +297,19 @@ export default function Home() {
           <label className={`text-sm font-medium ${muted} block mb-2`}>📍 Kuryer Lokasiyası</label>
           <button
             onClick={getLocation}
-            className="w-full bg-gradient-to-r from-blue-500 to-purple-500 text-white font-semibold py-4 rounded-xl flex items-center justify-center gap-2 active:scale-95 transition"
+            disabled={locationLoading}
+            className="w-full bg-gradient-to-r from-blue-500 to-purple-500 text-white font-semibold py-4 rounded-xl flex items-center justify-center gap-2 active:scale-95 transition cursor-pointer disabled:opacity-50"
           >
-            📍 Lokasiyanı Göndər
+            {locationLoading ? (
+              <>
+                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                Gözləyin...
+              </>
+            ) : location ? (
+              <>✓ Lokasiya Götürüldü</>
+            ) : (
+              <>📍 Lokasiyanı Göndər</>
+            )}
           </button>
           {location && (
             <p className={`text-xs ${muted} mt-2 text-center`}>
@@ -273,7 +326,7 @@ export default function Home() {
           <select
             value={selectedProduct}
             onChange={e => setSelectedProduct(Number(e.target.value) || '')}
-            className={`w-full p-4 rounded-xl border ${border} ${inputBg} ${text}`}
+            className={`w-full p-4 rounded-xl border ${border} ${inputBg} ${text} cursor-pointer`}
           >
             <option value="">-- Məhsul seçin --</option>
             {products.map(p => (
@@ -290,7 +343,7 @@ export default function Home() {
               value={quantity}
               min={1}
               onChange={e => setQuantity(Number(e.target.value))}
-              className={`w-full p-4 rounded-xl border ${border} ${inputBg} ${text} text-center text-xl font-bold`}
+              className={`w-full p-4 rounded-xl border ${border} ${inputBg} ${text} text-center text-xl font-bold cursor-text`}
             />
           </div>
           <div>
@@ -300,7 +353,7 @@ export default function Home() {
               value={giftQuantity}
               min={0}
               onChange={e => setGiftQuantity(Number(e.target.value))}
-              className={`w-full p-4 rounded-xl border ${border} ${inputBg} ${text} text-center text-xl font-bold`}
+              className={`w-full p-4 rounded-xl border ${border} ${inputBg} ${text} text-center text-xl font-bold cursor-text`}
             />
           </div>
         </div>
@@ -320,7 +373,7 @@ export default function Home() {
         <button
           onClick={submitSale}
           disabled={loading}
-          className="w-full bg-gradient-to-r from-orange-500 to-orange-400 text-white font-semibold py-4 rounded-2xl mt-5 flex items-center justify-center gap-2 active:scale-95 transition disabled:opacity-50"
+          className="w-full bg-gradient-to-r from-orange-500 to-orange-400 text-white font-semibold py-4 rounded-2xl mt-5 flex items-center justify-center gap-2 active:scale-95 transition cursor-pointer disabled:opacity-50"
         >
           {loading ? (
             <>
