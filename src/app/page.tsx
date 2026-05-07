@@ -268,7 +268,7 @@ export default function Home() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ payment_status })
       });
-      if (res.ok) fetchSales();
+      if (res.ok) fetchAllSales();
     } catch (err) {
       setError('Ödəniş statusu yenilənmədi');
     } finally {
