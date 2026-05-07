@@ -1,82 +1,28 @@
-// Statik məhsullar siyahısı - Vercel üçün
-const STATIC_PRODUCTS = [
-  { id: 1, name: 'Çörək (Kiçik)', price: 0.50, created_at: new Date().toISOString() },
-  { id: 2, name: 'Çörək (Orta)', price: 0.80, created_at: new Date().toISOString() },
-  { id: 3, name: 'Çörək (Böyük)', price: 1.00, created_at: new Date().toISOString() },
-  { id: 4, name: 'Sum Çörəyi', price: 1.50, created_at: new Date().toISOString() },
-  { id: 5, name: 'Göbələkli Çörək', price: 2.00, created_at: new Date().toISOString() },
-  { id: 6, name: 'Südlü Çörək', price: 1.20, created_at: new Date().toISOString() },
-];
+import { Redis } from '@upstash/redis';
 
-// Sales-ları yaddaşda saxlayaq (Vercel üçün)
-let sales: Sale[] = [];
-let saleIdCounter = 1;
+// Redis bağlantısı
+export const redis = new Redis({
+  url: process.env.UPSTASH_REDIS_REST_URL!,
+  token: process.env.UPSTASH_REDIS_REST_TOKEN!,
+});
 
-// Mock db obyekti
-const db = {
-  prepare: (query: string) => ({
-    all: () => {
-      if (query.includes('SELECT') && query.includes('products')) {
-        return STATIC_PRODUCTS;
-      }
-      if (query.includes('SELECT') && query.includes('sales')) {
-        return sales.slice(0, 50);
-      }
-      return [];
-    },
-    get: (id: number | string) => {
-      const numId = typeof id === 'string' ? parseInt(id) : id;
-      if (query.includes('products')) {
-        return STATIC_PRODUCTS.find(p => p.id === numId);
-      }
-      if (query.includes('sales')) {
-        return sales.find(s => s.id === numId);
-      }
-      return undefined;
-    },
-    run: (...args: any[]) => {
-      if (query.includes('INSERT INTO sales')) {
-        const [date, customer_name, customer_phone, latitude, longitude, product_id, quantity, gift_quantity, total_amount, qr_data] = args;
-        const newSale: Sale = {
-          id: saleIdCounter++,
-          date,
-          customer_name,
-          customer_phone,
-          latitude,
-          longitude,
-          product_id,
-          quantity,
-          gift_quantity,
-          total_amount,
-          qr_data,
-          created_at: new Date().toISOString(),
-        };
-        sales.unshift(newSale);
-        return { lastInsertRowid: newSale.id, changes: 1 };
-      }
-      if (query.includes('DELETE FROM products')) {
-        const [id] = args;
-        const idx = STATIC_PRODUCTS.findIndex(p => p.id === Number(id));
-        if (idx !== -1) {
-          STATIC_PRODUCTS.splice(idx, 1);
-          return { lastInsertRowid: 0, changes: 1 };
-        }
-        return { lastInsertRowid: 0, changes: 0 };
-      }
-      if (query.includes('INSERT INTO products')) {
-        return { lastInsertRowid: STATIC_PRODUCTS.length + 1, changes: 1 };
-      }
-      return { lastInsertRowid: 0, changes: 0 };
-    },
-  }),
-};
-
-export default db;
+export const PRODUCTS_KEY = 'products';
+export const SALES_KEY = 'sales';
+export const EXPENSES_KEY = 'expenses';
+export const SALE_ID_COUNTER = 'sale_id_counter';
 
 export interface Product {
   id: number;
   name: string;
   price: number;
+  created_at: string;
+}
+
+export interface Expense {
+  id: number;
+  description: string;
+  amount: number;
+  date: string;
   created_at: string;
 }
 
@@ -96,16 +42,200 @@ export interface Sale {
   product_name?: string;
   product_price?: number;
   sale_text?: string;
+  status?: 'pending' | 'delivered';
+  expert_id?: number;
+  courier_id?: number;
+  expert_name?: string;
+  courier_name?: string;
+  items?: {
+    product_id: number;
+    name: string;
+    price: number;
+    quantity: number;
+  }[];
 }
+
+const db = {
+  prepare: (query: string) => {
+    return {
+      all: async () => {
+        try {
+          if (query.includes('FROM products')) {
+            const data = await redis.get<string>(PRODUCTS_KEY);
+            return data && typeof data === 'string' ? JSON.parse(data) : (Array.isArray(data) ? data : []);
+          }
+          if (query.includes('FROM sales')) {
+            const data = await redis.get<string>(SALES_KEY);
+            let sales = data && typeof data === 'string' ? JSON.parse(data) : (Array.isArray(data) ? data : []);
+            
+            // Məhsul adlarını əlavə et (əgər yoxdursa)
+            const productsData = await redis.get<string>(PRODUCTS_KEY);
+            const products: Product[] = productsData && typeof productsData === 'string' ? JSON.parse(productsData) : (Array.isArray(productsData) ? productsData : []);
+            
+            return sales.map((sale: any) => {
+              const p = products.find(prod => prod.id === sale.product_id);
+              return {
+                ...sale,
+                product_name: p?.name || 'Məhsul',
+                product_price: p?.price || 0
+              };
+            });
+          }
+          if (query.includes('FROM expenses')) {
+            const data = await redis.get<string>(EXPENSES_KEY);
+            return data && typeof data === 'string' ? JSON.parse(data) : (Array.isArray(data) ? data : []);
+          }
+          return [];
+        } catch (error) {
+          console.error('db.prepare().all() error:', error);
+          return [];
+        }
+      },
+      get: async (...args: any[]) => {
+        try {
+          if (query.includes('FROM sales') && query.includes('id = ?')) {
+            const [id] = args;
+            const data = await redis.get<string>(SALES_KEY);
+            const sales: Sale[] = data && typeof data === 'string' ? JSON.parse(data) : (Array.isArray(data) ? data : []);
+            const sale = sales.find(s => s.id === Number(id));
+            if (sale) {
+              const productsData = await redis.get<string>(PRODUCTS_KEY);
+              const products: Product[] = productsData && typeof productsData === 'string' ? JSON.parse(productsData) : (Array.isArray(productsData) ? productsData : []);
+              const p = products.find(prod => prod.id === sale.product_id);
+              return {
+                ...sale,
+                product_name: p?.name || 'Məhsul',
+                product_price: p?.price || 0
+              };
+            }
+          }
+          return undefined;
+        } catch (error) {
+          console.error('db.prepare().get() error:', error);
+          return undefined;
+        }
+      },
+      run: async (...args: any[]) => {
+        try {
+          if (query.includes('INSERT INTO sales')) {
+            const [date, customer_name, customer_phone, latitude, longitude, product_id, quantity, gift_quantity, total_amount, qr_data, items, expert_id, expert_name] = args;
+            
+            let currentId = await redis.get<number>(SALE_ID_COUNTER);
+            if (!currentId) currentId = 1;
+            
+            const newSale: Sale = {
+              id: currentId,
+              date,
+              customer_name,
+              customer_phone,
+              latitude: latitude || null,
+              longitude: longitude || null,
+              product_id,
+              quantity,
+              gift_quantity: gift_quantity || 0,
+              total_amount,
+              qr_data,
+              created_at: new Date().toISOString(),
+              status: 'pending',
+              items: items || null,
+              expert_id: expert_id || null,
+              expert_name: expert_name || null
+            };
+            
+            const salesJson = await redis.get<string>(SALES_KEY);
+            let sales: Sale[] = salesJson && typeof salesJson === 'string' ? JSON.parse(salesJson) : (Array.isArray(salesJson) ? salesJson : []);
+            sales.unshift(newSale);
+            sales = sales.slice(0, 100);
+            
+            await redis.set(SALES_KEY, JSON.stringify(sales));
+            await redis.set(SALE_ID_COUNTER, currentId + 1);
+            
+            return { lastInsertRowid: currentId, changes: 1 };
+          }
+
+          if (query.includes('UPDATE sales SET status = ? WHERE id = ?')) {
+            const [status, id, courier_id, courier_name] = args;
+            const salesJson = await redis.get<string>(SALES_KEY);
+            let sales: Sale[] = salesJson && typeof salesJson === 'string' ? JSON.parse(salesJson) : (Array.isArray(salesJson) ? salesJson : []);
+            const idx = sales.findIndex(s => s.id === Number(id));
+            if (idx !== -1) {
+              sales[idx].status = status;
+              if (courier_id) sales[idx].courier_id = courier_id;
+              if (courier_name) sales[idx].courier_name = courier_name;
+              await redis.set(SALES_KEY, JSON.stringify(sales));
+              return { lastInsertRowid: 0, changes: 1 };
+            }
+            return { lastInsertRowid: 0, changes: 0 };
+          }
+
+          if (query.includes('INSERT INTO expenses')) {
+            const [description, amount, date] = args;
+            const expensesJson = await redis.get<string>(EXPENSES_KEY);
+            let expenses: Expense[] = expensesJson && typeof expensesJson === 'string' ? JSON.parse(expensesJson) : (Array.isArray(expensesJson) ? expensesJson : []);
+            const newExpense: Expense = {
+              id: Date.now(),
+              description,
+              amount,
+              date,
+              created_at: new Date().toISOString()
+            };
+            expenses.unshift(newExpense);
+            await redis.set(EXPENSES_KEY, JSON.stringify(expenses));
+            return { lastInsertRowid: newExpense.id, changes: 1 };
+          }
+          
+          if (query.includes('DELETE FROM sales')) {
+            const [id] = args;
+            const salesJson = await redis.get<string>(SALES_KEY);
+            let sales: Sale[] = salesJson && typeof salesJson === 'string' ? JSON.parse(salesJson) : (Array.isArray(salesJson) ? salesJson : []);
+            const idx = sales.findIndex(s => s.id === Number(id));
+            if (idx !== -1) {
+              sales.splice(idx, 1);
+              await redis.set(SALES_KEY, JSON.stringify(sales));
+              return { lastInsertRowid: 0, changes: 1 };
+            }
+            return { lastInsertRowid: 0, changes: 0 };
+          }
+
+          if (query.includes('DELETE FROM products')) {
+            const [id] = args;
+            const productsJson = await redis.get<string>(PRODUCTS_KEY);
+            let products: Product[] = productsJson && typeof productsJson === 'string' ? JSON.parse(productsJson) : (Array.isArray(productsJson) ? productsJson : []);
+            const idx = products.findIndex(p => p.id === Number(id));
+            if (idx !== -1) {
+              products.splice(idx, 1);
+              await redis.set(PRODUCTS_KEY, JSON.stringify(products));
+              return { lastInsertRowid: 0, changes: 1 };
+            }
+          }
+          
+          if (query.includes('INSERT INTO products')) {
+            const [name, price] = args;
+            const productsJson = await redis.get<string>(PRODUCTS_KEY);
+            let products: Product[] = productsJson && typeof productsJson === 'string' ? JSON.parse(productsJson) : (Array.isArray(productsJson) ? productsJson : []);
+            const newId = products.length > 0 ? Math.max(...products.map(p => p.id)) + 1 : 1;
+            const newProduct: Product = { id: newId, name, price, created_at: new Date().toISOString() };
+            products.push(newProduct);
+            await redis.set(PRODUCTS_KEY, JSON.stringify(products));
+            return { lastInsertRowid: newId, changes: 1 };
+          }
+          
+          return { lastInsertRowid: 0, changes: 0 };
+        } catch (error) {
+          console.error('db.prepare().run() error:', error);
+          return { lastInsertRowid: 0, changes: 0 };
+        }
+      },
+    };
+  },
+};
+
+export default db;
 
 // Satış mətn generatoru
 export function generateSaleText(sale: Sale): string {
   const date = new Date(sale.created_at).toLocaleString('az-AZ', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
+    day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
   });
   
   const location = sale.latitude && sale.longitude 
@@ -113,17 +243,30 @@ export function generateSaleText(sale: Sale): string {
     : '📍 Lokasiya: Yoxdur';
   
   const giftText = sale.gift_quantity > 0 ? `\n🎁 Hədiyyə: ${sale.gift_quantity} ədəd` : '';
-  
-  return `🍞 YENİ SİFARİŞ #${sale.id}
+  const statusEmoji = sale.status === 'delivered' ? '✅ Çatdırıldı' : '⏳ Gözləyir';
+  const expertInfo = sale.expert_name ? `✍️ Ekspeditor: ${sale.expert_name}\n` : (sale.expert_id ? `✍️ Ekspeditor ID: ${sale.expert_id}\n` : '');
+  const courierInfo = sale.courier_name ? `🚚 Kuryer: ${sale.courier_name}\n` : (sale.courier_id ? `🚚 Kuryer ID: ${sale.courier_id}\n` : '');
 
+  let itemsText = '';
+  if (sale.items && sale.items.length > 0) {
+    itemsText = sale.items.map(item => `• ${item.name}: ${item.quantity} ədəd`).join('\n');
+  } else {
+    itemsText = `• ${sale.product_name || 'Məhsul'}: ${sale.quantity} ədəd`;
+  }
+
+  return `🍞 YENİ SİFARİŞ #${sale.id}
+[${statusEmoji}]
+
+${expertInfo}${courierInfo}
 📅 Tarix: ${date}
 👤 Müştəri: ${sale.customer_name}
 📱 Nömrə: ${sale.customer_phone || 'Yoxdur'}
 
-🍞 Məhsul: ${sale.product_name || 'Naməlum'}
-📦 Miqdar: ${sale.quantity} ədəd${giftText}
-💰 Ümumi: ${sale.total_amount.toFixed(2)} ₼
+🛒 Sifariş:
+${itemsText}
 
+💰 Ümumi: ${sale.total_amount.toFixed(2)} ₼
+${giftText}
 ${location}
 `;
 }

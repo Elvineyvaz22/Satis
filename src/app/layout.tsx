@@ -22,7 +22,7 @@ export default function RootLayout({
   return (
     <html lang="az">
       <head>
-        <Script src="https://telegram.org/js/telegram-web-app.js" strategy="lazyOnload" />
+        <Script src="https://telegram.org/js/telegram-web-app.js" strategy="beforeInteractive" />
       </head>
       <body className="antialiased" suppressHydrationWarning>
         {children}

@@ -1,86 +1,119 @@
 import { NextRequest, NextResponse } from 'next/server';
-import db, { Sale, generateSaleText } from '@/lib/db';
+import { redis, PRODUCTS_KEY, SALES_KEY, SALE_ID_COUNTER, Sale, generateSaleText } from '@/lib/db';
+import db from '@/lib/db';
 
-// GET - Bütün satışları gətir
-export async function GET() {
+const STATIC_PRODUCTS = [
+  { id: 1, name: 'Çörək (Kiçik)', price: 0.50 },
+  { id: 2, name: 'Çörək (Orta)', price: 0.80 },
+  { id: 3, name: 'Çörək (Böyük)', price: 1.00 },
+  { id: 4, name: 'Sum Çörəyi', price: 1.50 },
+  { id: 5, name: 'Göbələkli Çörək', price: 2.00 },
+  { id: 6, name: 'Südlü Çörək', price: 1.20 },
+];
+
+async function getProducts() {
   try {
-    const sales = db.prepare(`
-      SELECT s.*, p.name as product_name, p.price as product_price
-      FROM sales s
-      LEFT JOIN products p ON s.product_id = p.id
-      ORDER BY s.id DESC
-      LIMIT 50
-    `).all() as Sale[];
-    
-    // Hər satışa sale_text əlavə et
-    const salesWithText = sales.map(s => ({
-      ...s,
-      sale_text: generateSaleText(s)
-    }));
-    
-    return NextResponse.json(salesWithText);
+    const products = await redis.get<string>(PRODUCTS_KEY);
+    if (products && typeof products === 'string') return JSON.parse(products);
+    if (Array.isArray(products)) return products;
+    return STATIC_PRODUCTS;
   } catch (error) {
-    return NextResponse.json({ error: 'Xəta baş verdi' }, { status: 500 });
+    return STATIC_PRODUCTS;
   }
 }
 
-// POST - Yeni satış əlavə et
+async function getSales(): Promise<Sale[]> {
+  try {
+    const sales = await redis.get<string>(SALES_KEY);
+    if (sales && typeof sales === 'string') return JSON.parse(sales);
+    if (Array.isArray(sales)) return sales;
+    return [];
+  } catch (error) {
+    return [];
+  }
+}
+
+async function sendTelegramMessage(text: string, tg_user_id?: number) {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  const chatId = process.env.TELEGRAM_ADMIN_CHAT_ID;
+  if (!token || !chatId) return false;
+  try {
+    await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: chatId, text: text, parse_mode: 'HTML' }),
+    });
+    if (tg_user_id && tg_user_id.toString() !== chatId) {
+      await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: tg_user_id, text: text, parse_mode: 'HTML' }),
+      }).catch(() => {});
+    }
+    return true;
+  } catch (error) {
+    return false;
+  }
+}
+
+export async function GET() {
+  try {
+    const sales = await getSales();
+    const products = await getProducts();
+    const result = sales.map(s => {
+      const p = products.find((prod: any) => prod.id === s.product_id);
+      return { ...s, product_name: p?.name || 'Məhsul', product_price: p?.price || 0 };
+    });
+    return NextResponse.json(result);
+  } catch (error) {
+    return NextResponse.json({ error: 'Xəta' }, { status: 500 });
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const {
-      date,
-      customer_name,
-      customer_phone,
-      latitude,
-      longitude,
-      product_id,
-      quantity,
-      gift_quantity = 0
-    } = body;
+    const { date, customer_name, customer_phone, latitude, longitude, product_id, quantity, gift_quantity = 0, tg_user_id, items, userName } = body;
 
-    if (!date || !customer_name || !customer_phone || !product_id || !quantity) {
-      return NextResponse.json({ error: 'Bütün sahələri doldurun' }, { status: 400 });
+    if (!date || !customer_name || (!product_id && !items)) {
+      return NextResponse.json({ error: 'Məlumatlar çatışmır' }, { status: 400 });
     }
 
-    // Məhsulun qiymətini al
-    const product = db.prepare('SELECT * FROM products WHERE id = ?').get(product_id) as { id: number; name: string; price: number } | undefined;
-    
-    if (!product) {
-      return NextResponse.json({ error: 'Məhsul tapılmadı' }, { status: 404 });
+    const products = await getProducts();
+    let total_amount = 0;
+    let finalItems = items;
+
+    if (items && items.length > 0) {
+      total_amount = items.reduce((acc: number, item: any) => acc + (item.price * item.quantity), 0);
+    } else {
+      const product = products.find((p: any) => p.id === Number(product_id));
+      total_amount = product ? product.price * Number(quantity) : 0;
+      finalItems = [{
+        product_id: Number(product_id),
+        name: product?.name || 'Məhsul',
+        price: product?.price || 0,
+        quantity: Number(quantity)
+      }];
     }
 
-    const total_amount = product.price * quantity;
-    const qr_data = `LacinSatis:${Date.now()}`;
+    const qr_data = `SALE-${Date.now()}`;
+    const result = await (db.prepare('INSERT INTO sales') as any).run(
+      date, customer_name, customer_phone, latitude, longitude, product_id || 0, quantity || 0, gift_quantity, total_amount, qr_data, finalItems, tg_user_id, userName
+    );
 
-    const result = db.prepare(`
-      INSERT INTO sales (date, customer_name, customer_phone, latitude, longitude, product_id, quantity, gift_quantity, total_amount, qr_data)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(date, customer_name, customer_phone, latitude || null, longitude || null, product_id, quantity, gift_quantity, total_amount, qr_data);
-
-    // Yeni satış obyekti yaradıb mətn generate et
-    const newSale: Sale = {
-      id: result.lastInsertRowid as number,
-      date,
-      customer_name,
-      customer_phone,
-      latitude: latitude || null,
-      longitude: longitude || null,
-      product_id,
-      quantity,
-      gift_quantity,
-      total_amount,
-      qr_data,
-      created_at: new Date().toISOString(),
-      product_name: product.name,
-      product_price: product.price
+    const saleObj = {
+      id: result.lastInsertRowid,
+      date, customer_name, customer_phone, 
+      latitude, longitude, // Buranı əlavə etdik
+      total_amount, items: finalItems, gift_quantity, expert_name: userName, created_at: new Date().toISOString()
     };
 
-    return NextResponse.json({
-      ...newSale,
-      sale_text: generateSaleText(newSale)
-    }, { status: 201 });
+    const saleText = generateSaleText(saleObj as any);
+    await sendTelegramMessage(saleText, tg_user_id);
+    
+    return NextResponse.json({ ...saleObj, sale_text: saleText });
   } catch (error) {
+    console.error('POST error:', error);
     return NextResponse.json({ error: 'Xəta baş verdi' }, { status: 500 });
   }
 }
