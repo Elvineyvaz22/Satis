@@ -407,7 +407,7 @@ export default function Home() {
     ctx.font = 'bold 16px Courier New';
     let y = 140;
     selectedReceipt.items?.forEach(item => {
-      const itemText = `${item.name} x ${item.quantity}`;
+      const itemText = `${item.name} x ${item.quantity} (${item.price.toFixed(2)} ₼)`;
       ctx.fillText(itemText, 40, y);
       
       if (item.gift_quantity && item.gift_quantity > 0) {
@@ -809,15 +809,15 @@ export default function Home() {
                 <div className="space-y-3">
                   <h3 className="text-sm font-bold uppercase tracking-widest text-gray-500">Müştəri Bazası</h3>
                   {uniqueMarkets.map((m, idx) => {
-                    const isManual = customers.some(c => c.name === m.name && c.phone === m.phone);
-                    const custId = isManual ? customers.find(c => c.name === m.name && c.phone === m.phone)?.id : null;
+                    const manualCust = customers.find(c => c.name.toLowerCase().trim() === m.name.toLowerCase().trim());
+                    const custId = manualCust ? manualCust.id : null;
                     return (
                       <div key={idx} className={`${cardBg} p-4 rounded-3xl border ${border} flex justify-between items-center`}>
                         <div>
                           <p className="font-bold">{m.name}</p>
                           <p className="text-xs text-gray-400">{m.phone || 'Nömrə yoxdur'}</p>
                         </div>
-                        {isManual && custId && (
+                        {manualCust && custId && (
                           <button onClick={() => deleteCustomer(custId)} className="w-8 h-8 bg-red-100 text-red-500 rounded-full flex items-center justify-center text-xs active:scale-95">✕</button>
                         )}
                       </div>
@@ -1041,7 +1041,10 @@ export default function Home() {
               <div className="space-y-2">
                 {result?.basket?.map((item: any, idx: number) => (
                   <div key={idx} className="flex justify-between text-sm">
-                    <span>{item.name} x {item.quantity}</span>
+                    <span>
+                      {item.name} x {item.quantity}
+                      <span className="text-[10px] text-gray-400 ml-1">({item.price.toFixed(2)} ₼)</span>
+                    </span>
                     <span className="font-bold">{(item.price * item.quantity).toFixed(2)} ₼</span>
                   </div>
                 ))}
@@ -1083,6 +1086,7 @@ export default function Home() {
                     <div key={idx} className="flex justify-between text-sm py-1 border-b border-gray-100 print:border-black/5">
                       <span className="font-medium">
                         {item.name} x {item.quantity}
+                        <span className="text-[10px] text-gray-500 ml-1">({item.price.toFixed(2)} ₼)</span>
                         {item.gift_quantity ? <span className="text-green-600 ml-1">(+{item.gift_quantity}🎁)</span> : ''}
                       </span>
                       <span className="font-bold">{(item.price * item.quantity).toFixed(2)} ₼</span>
