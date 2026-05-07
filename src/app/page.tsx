@@ -33,6 +33,7 @@ interface SaleResult {
   sale_text?: string;
   created_at: string;
   status: 'pending' | 'delivered';
+  payment_status?: 'paid' | 'unpaid';
   latitude?: number;
   longitude?: number;
   items?: BasketItem[];
