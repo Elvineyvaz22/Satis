@@ -47,7 +47,7 @@ export default function Home() {
   const [isAuthorized, setIsAuthorized] = useState<boolean | null>(null);
   const [isActualAdmin, setIsActualAdmin] = useState(false);
   const [authLoading, setAuthLoading] = useState(true);
-  const [role, setRole] = useState<'admin' | 'courier' | 'expert' | null>(null);
+  const [role, setRole] = useState<'admin' | 'courier' | 'expeditor' | null>(null);
   const [darkMode, setDarkMode] = useState(false);
   const [products, setProducts] = useState<Product[]>([]);
   const [allSales, setAllSales] = useState<SaleResult[]>([]);
@@ -126,7 +126,7 @@ export default function Home() {
     if (sdkReady && isAuthorized) {
       setDate(new Date().toISOString().split('T')[0]);
       fetchProducts();
-      if (role === 'admin' || role === 'courier' || role === 'expert') fetchAllSales();
+      if (role === 'admin' || role === 'courier' || role === 'expeditor') fetchAllSales();
       if (role === 'admin') fetchExpenses();
     }
   }, [sdkReady, isAuthorized, role]);
@@ -501,7 +501,7 @@ export default function Home() {
             >
               <option value="admin">Admin</option>
               <option value="courier">Kuryer</option>
-              <option value="expert">Ekspert</option>
+              <option value="expeditor">Ekspeditor</option>
             </select>
           )}
         </header>
@@ -545,9 +545,10 @@ export default function Home() {
                           ))}
                         </div>
                         <div className="pt-2 border-t border-black/5 flex justify-between text-[11px]">
-                          <span className="text-gray-400">Ekspert:</span>
+                          <span className="text-gray-400">Ekspeditor:</span>
                           <span className="font-bold">{s.expert_name || s.expert_id || 'Naməlum'}</span>
                         </div>
+
                         {s.courier_name && (
                           <div className="flex justify-between items-center text-[11px]">
                             <span className="text-gray-400">Kuryer:</span>
@@ -723,8 +724,8 @@ export default function Home() {
           </div>
         )}
 
-        {/* --- EXPERT VIEW --- */}
-        {role === 'expert' && !showResult && (
+        {/* --- EXPEDITOR VIEW --- */}
+        {role === 'expeditor' && !showResult && (
           <div className="space-y-8">
             <div className="grid grid-cols-2 gap-4">
               <div className={`${cardBg} p-6 rounded-3xl border-2 border-orange-500/10 shadow-lg`}>

@@ -244,7 +244,7 @@ export function generateSaleText(sale: Sale): string {
   
   const giftText = sale.gift_quantity > 0 ? `\n🎁 Hədiyyə: ${sale.gift_quantity} ədəd` : '';
   const statusEmoji = sale.status === 'delivered' ? '✅ Çatdırıldı' : '⏳ Gözləyir';
-  const expertInfo = sale.expert_name ? `✍️ Ekspert: ${sale.expert_name}\n` : (sale.expert_id ? `✍️ Ekspert ID: ${sale.expert_id}\n` : '');
+  const expertInfo = sale.expert_name ? `✍️ Ekspeditor: ${sale.expert_name}\n` : (sale.expert_id ? `✍️ Ekspeditor ID: ${sale.expert_id}\n` : '');
   const courierInfo = sale.courier_name ? `🚚 Kuryer: ${sale.courier_name}\n` : (sale.courier_id ? `🚚 Kuryer ID: ${sale.courier_id}\n` : '');
 
   let itemsText = '';

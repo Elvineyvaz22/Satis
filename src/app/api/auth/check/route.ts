@@ -8,9 +8,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ role: null, error: 'User ID missing' }, { status: 400 });
     }
 
-    const adminIds = (process.env.ADMIN_IDS || '').split(',').map(id => id.trim());
+    const expeditorIds = (process.env.EKSPEDITOR_IDS || '').split(',').map(id => id.trim());
     const courierIds = (process.env.COURIER_IDS || '').split(',').map(id => id.trim());
-    const expertIds = (process.env.EXPERT_IDS || '').split(',').map(id => id.trim());
+    const adminIds = (process.env.ADMIN_IDS || '').split(',').map(id => id.trim());
 
     const uid = userId.toString();
 
@@ -18,8 +18,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ role: 'admin' });
     } else if (courierIds.includes(uid)) {
       return NextResponse.json({ role: 'courier' });
-    } else if (expertIds.includes(uid)) {
-      return NextResponse.json({ role: 'expert' });
+    } else if (expeditorIds.includes(uid)) {
+      return NextResponse.json({ role: 'expeditor' });
     }
 
     return NextResponse.json({ role: null });
