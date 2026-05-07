@@ -898,10 +898,28 @@ export default function Home() {
 
         <style jsx global>{`
           @media print {
-            body * { visibility: hidden; }
-            #thermal-receipt, #thermal-receipt * { visibility: visible; }
-            #thermal-receipt { position: absolute; left: 0; top: 0; width: 100%; padding: 0; margin: 0; background: white !important; color: black !important; }
-            .no-print { display: none !important; }
+            body { 
+              visibility: hidden !important; 
+              background: white !important;
+              -webkit-print-color-adjust: exact;
+            }
+            #thermal-receipt { 
+              visibility: visible !important; 
+              position: fixed !important; 
+              left: 0 !important; 
+              top: 0 !important; 
+              width: 100% !important; 
+              margin: 0 !important; 
+              padding: 20px !important;
+              background: white !important;
+              z-index: 9999999 !important;
+            }
+            #thermal-receipt * { 
+              visibility: visible !important; 
+            }
+            .no-print, .no-print * { 
+              display: none !important; 
+            }
           }
         `}</style>
       </div>
