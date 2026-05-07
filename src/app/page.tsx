@@ -838,42 +838,42 @@ export default function Home() {
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-center justify-center p-6 animate-in fade-in duration-200 print:bg-white print:p-0">
             <div className={`${cardBg} w-full max-w-sm rounded-[40px] border ${border} shadow-2xl overflow-hidden animate-in slide-in-from-bottom-10 duration-300 print:shadow-none print:border-none print:max-w-full`}>
               {/* Thermal Receipt Content */}
-              <div id="thermal-receipt" className="p-8 space-y-6 bg-white text-black font-mono print:p-0 print:w-full">
-                <div className="text-center space-y-2 border-b-2 border-dashed border-black/10 pb-4">
-                  <h2 className="text-xl font-black uppercase tracking-tighter">Laçın Satış</h2>
-                  <p className="text-[10px]">Təşəkkür edirik!</p>
-                  <p className="text-[8px] opacity-50">Sifariş ID: #{selectedReceipt.id}</p>
+              <div id="thermal-receipt" className="p-8 space-y-6 bg-white text-black font-sans print:p-0 print:w-full print:text-black">
+                <div className="text-center space-y-2 border-b-2 border-dashed border-black pb-4">
+                  <h2 className="text-2xl font-black uppercase tracking-tight">LAÇIN SATIŞ</h2>
+                  <p className="text-xs font-bold">Təşəkkür edirik!</p>
+                  <p className="text-[10px] opacity-70">Sifariş ID: #{selectedReceipt.id}</p>
                 </div>
 
-                <div className="space-y-2">
-                  <div className="flex justify-between text-[10px] font-bold border-b border-black/5 pb-1">
+                <div className="space-y-3">
+                  <div className="flex justify-between text-xs font-black border-b-2 border-black pb-1">
                     <span>Məhsul</span>
                     <span>Məbləğ</span>
                   </div>
                   {selectedReceipt.items?.map((item, idx) => (
-                    <div key={idx} className="flex justify-between text-[10px]">
-                      <span>{item.name} x {item.quantity}</span>
+                    <div key={idx} className="flex justify-between text-sm py-1 border-b border-gray-100 print:border-black/5">
+                      <span className="font-medium">{item.name} x {item.quantity}</span>
                       <span className="font-bold">{(item.price * item.quantity).toFixed(2)} ₼</span>
                     </div>
                   ))}
                   {selectedReceipt.gift_quantity > 0 && (
-                    <p className="text-[10px] text-green-600 font-bold border-t border-dashed border-black/10 pt-1">🎁 Hədiyyə: {selectedReceipt.gift_quantity} ədəd</p>
+                    <p className="text-sm text-green-600 font-black border-t border-dashed border-black pt-2">🎁 Hədiyyə: {selectedReceipt.gift_quantity} ədəd</p>
                   )}
                 </div>
 
-                <div className="pt-4 border-t-2 border-dashed border-black/20 flex justify-between items-center">
-                  <span className="font-bold text-xs uppercase">Yekun</span>
-                  <span className="text-xl font-black">{selectedReceipt.total_amount.toFixed(2)} ₼</span>
+                <div className="pt-4 border-t-4 border-double border-black flex justify-between items-center">
+                  <span className="font-black text-sm uppercase">Yekun Məbləğ</span>
+                  <span className="text-2xl font-black">{selectedReceipt.total_amount.toFixed(2)} ₼</span>
                 </div>
 
-                <div className="text-[9px] space-y-1 pt-4 border-t border-black/5">
-                  <p>👤 Müştəri: {selectedReceipt.customer_name}</p>
-                  <p>📱 Telefon: {selectedReceipt.customer_phone}</p>
-                  <p>📅 Tarix: {new Date(selectedReceipt.created_at).toLocaleString()}</p>
+                <div className="text-xs space-y-2 pt-4 border-t border-dashed border-black">
+                  <p><span className="font-bold">Müştəri:</span> {selectedReceipt.customer_name}</p>
+                  <p><span className="font-bold">Telefon:</span> {selectedReceipt.customer_phone}</p>
+                  <p><span className="font-bold">Tarix:</span> {new Date(selectedReceipt.created_at).toLocaleString('az-AZ')}</p>
                 </div>
 
-                <div className="text-center pt-4 border-t border-dashed border-black/10">
-                  <p className="text-[8px] italic">Yolunuz açıq olsun!</p>
+                <div className="text-center pt-6 border-t-2 border-dashed border-black/10">
+                  <p className="text-[10px] font-bold italic">Yolunuz açıq olsun! 🍞</p>
                 </div>
               </div>
 
@@ -898,27 +898,41 @@ export default function Home() {
 
         <style jsx global>{`
           @media print {
-            body { 
-              visibility: hidden !important; 
-              background: white !important;
-              -webkit-print-color-adjust: exact;
+            /* Hide everything by default */
+            body * {
+              visibility: hidden !important;
             }
-            #thermal-receipt { 
-              visibility: visible !important; 
-              position: fixed !important; 
-              left: 0 !important; 
-              top: 0 !important; 
-              width: 100% !important; 
-              margin: 0 !important; 
-              padding: 20px !important;
+            
+            /* Background should be white */
+            body, html {
               background: white !important;
+              margin: 0 !important;
+              padding: 0 !important;
+            }
+
+            /* Show ONLY the receipt and its content */
+            #thermal-receipt, #thermal-receipt * {
+              visibility: visible !important;
+              color: black !important;
+            }
+
+            #thermal-receipt {
+              position: fixed !important;
+              left: 0 !important;
+              top: 0 !important;
+              width: 100% !important;
+              padding: 40px !important;
+              margin: 0 !important;
+              background: white !important;
+              display: block !important;
+              border: none !important;
               z-index: 9999999 !important;
             }
-            #thermal-receipt * { 
-              visibility: visible !important; 
-            }
-            .no-print, .no-print * { 
-              display: none !important; 
+
+            /* Extra force to hide UI elements */
+            .no-print, header, footer, button, .backdrop-blur-sm {
+              display: none !important;
+              opacity: 0 !important;
             }
           }
         `}</style>
