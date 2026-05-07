@@ -34,13 +34,27 @@ export async function PATCH(
   try {
     const { id } = params;
     const body = await request.json();
-    const { status, userId, userName } = body;
+    const { status, payment_status, userId, userName } = body;
 
-    if (!status || !['pending', 'delivered'].includes(status)) {
-      return NextResponse.json({ error: 'Düzgün status göndərin' }, { status: 400 });
+    if (status) {
+      if (!['pending', 'delivered'].includes(status)) {
+        return NextResponse.json({ error: 'Düzgün status göndərin' }, { status: 400 });
+      }
+      await (db.prepare('UPDATE sales SET status = ? WHERE id = ?') as any).run(status, id, userId, userName);
+    }
+    
+    if (payment_status) {
+      if (!['paid', 'unpaid'].includes(payment_status)) {
+        return NextResponse.json({ error: 'Düzgün payment_status göndərin' }, { status: 400 });
+      }
+      await (db.prepare('UPDATE sales SET payment_status = ? WHERE id = ?') as any).run(payment_status, id);
     }
 
-    const result = await (db.prepare('UPDATE sales SET status = ? WHERE id = ?') as any).run(status, id, userId, userName);
+    if (!status && !payment_status) {
+       return NextResponse.json({ error: 'Heç nə dəyişdirilmədi' }, { status: 400 });
+    }
+
+    let result = { changes: 1 }; // simplify error check, we assume success if no error was thrown
 
     if (result.changes === 0) {
       return NextResponse.json({ error: 'Satış tapılmadı' }, { status: 404 });

@@ -43,6 +43,7 @@ export interface Sale {
   product_price?: number;
   sale_text?: string;
   status?: 'pending' | 'delivered';
+  payment_status?: 'paid' | 'unpaid';
   expert_id?: number;
   courier_id?: number;
   expert_name?: string;
@@ -138,6 +139,7 @@ const db = {
               qr_data,
               created_at: new Date().toISOString(),
               status: 'pending',
+              payment_status: 'unpaid',
               items: items || null,
               expert_id: expert_id || null,
               expert_name: expert_name || null
@@ -163,6 +165,19 @@ const db = {
               sales[idx].status = status;
               if (courier_id) sales[idx].courier_id = courier_id;
               if (courier_name) sales[idx].courier_name = courier_name;
+              await redis.set(SALES_KEY, JSON.stringify(sales));
+              return { lastInsertRowid: 0, changes: 1 };
+            }
+            return { lastInsertRowid: 0, changes: 0 };
+          }
+
+          if (query.includes('UPDATE sales SET payment_status = ? WHERE id = ?')) {
+            const [payment_status, id] = args;
+            const salesJson = await redis.get<string>(SALES_KEY);
+            let sales: Sale[] = salesJson && typeof salesJson === 'string' ? JSON.parse(salesJson) : (Array.isArray(salesJson) ? salesJson : []);
+            const idx = sales.findIndex(s => s.id === Number(id));
+            if (idx !== -1) {
+              sales[idx].payment_status = payment_status;
               await redis.set(SALES_KEY, JSON.stringify(sales));
               return { lastInsertRowid: 0, changes: 1 };
             }

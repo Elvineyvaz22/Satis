@@ -260,6 +260,22 @@ export default function Home() {
     }
   }
 
+  async function updatePaymentStatus(id: number, payment_status: 'paid' | 'unpaid') {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/sales/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ payment_status })
+      });
+      if (res.ok) fetchSales();
+    } catch (err) {
+      setError('Ödəniş statusu yenilənmədi');
+    } finally {
+      setLoading(false);
+    }
+  }
+
   async function deleteProduct(id: number) {
     if (!confirm('Bu məhsulu silmək istəyirsiniz?')) return;
     try {
@@ -603,11 +619,16 @@ export default function Home() {
                         <p className="font-bold">#{s.id} - {s.customer_name}</p>
                         <p className="text-[10px] text-gray-400">{new Date(s.created_at).toLocaleDateString()} {new Date(s.created_at).toLocaleTimeString()}</p>
                       </div>
-                      <div className="text-right">
+                      <div className="text-right flex flex-col items-end space-y-1">
                         <p className="font-bold">{s.total_amount.toFixed(2)} ₼</p>
-                        <span className={`text-[8px] font-bold px-2 py-0.5 rounded-full ${s.status === 'delivered' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>
-                          {s.status === 'delivered' ? 'Çatdırıldı' : 'Gözləyir'}
-                        </span>
+                        <div className="flex gap-1">
+                          <span className={`text-[8px] font-bold px-2 py-0.5 rounded-full ${s.status === 'delivered' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>
+                            {s.status === 'delivered' ? 'Çatdırıldı' : 'Gözləyir'}
+                          </span>
+                          <span className={`text-[8px] font-bold px-2 py-0.5 rounded-full ${s.payment_status === 'paid' ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700'}`}>
+                            {s.payment_status === 'paid' ? 'Ödəndi' : 'Ödənmədi'}
+                          </span>
+                        </div>
                       </div>
                     </div>
                     {expandedSaleId === s.id && (
@@ -632,12 +653,23 @@ export default function Home() {
                             <span className="font-bold text-green-600">{s.courier_name}</span>
                           </div>
                         )}
-                        <button 
-                          onClick={(e) => { e.stopPropagation(); setSelectedReceipt(s); }}
-                          className="w-full mt-2 py-2 bg-orange-500/10 text-orange-500 rounded-xl text-[10px] font-bold border border-orange-500/20"
-                        >
-                          🧾 Çeki Göstər
-                        </button>
+                        <div className="flex gap-2">
+                          <button 
+                            onClick={(e) => { 
+                              e.stopPropagation(); 
+                              updatePaymentStatus(s.id, s.payment_status === 'paid' ? 'unpaid' : 'paid'); 
+                            }}
+                            className={`w-full mt-2 py-2 text-white rounded-xl text-[10px] font-bold active:scale-95 ${s.payment_status === 'paid' ? 'bg-red-500' : 'bg-blue-500'}`}
+                          >
+                            {s.payment_status === 'paid' ? '❌ Ödənişi Ləğv Et' : '✅ Ödənişi Təsdiqlə'}
+                          </button>
+                          <button 
+                            onClick={(e) => { e.stopPropagation(); setSelectedReceipt(s); }}
+                            className="w-full mt-2 py-2 bg-orange-500/10 text-orange-500 rounded-xl text-[10px] font-bold border border-orange-500/20 active:scale-95"
+                          >
+                            🧾 Çeki Göstər
+                          </button>
+                        </div>
                       </div>
                     )}
                   </div>
