@@ -52,6 +52,7 @@ export interface Sale {
     name: string;
     price: number;
     quantity: number;
+    gift_quantity?: number;
   }[];
 }
 
@@ -208,6 +209,20 @@ const db = {
               return { lastInsertRowid: 0, changes: 1 };
             }
           }
+
+          if (query.includes('DELETE FROM expenses')) {
+            const [id] = args;
+            const expensesJson = await redis.get<string>(EXPENSES_KEY);
+            let expenses: Expense[] = expensesJson && typeof expensesJson === 'string' ? JSON.parse(expensesJson) : (Array.isArray(expensesJson) ? expensesJson : []);
+            // Use string comparison to be safe with types
+            const idx = expenses.findIndex(e => String(e.id) === String(id));
+            if (idx !== -1) {
+              expenses.splice(idx, 1);
+              await redis.set(EXPENSES_KEY, JSON.stringify(expenses));
+              return { lastInsertRowid: 0, changes: 1 };
+            }
+            return { lastInsertRowid: 0, changes: 0 };
+          }
           
           if (query.includes('INSERT INTO products')) {
             const [name, price] = args;
@@ -242,14 +257,14 @@ export function generateSaleText(sale: Sale): string {
     ? `📍 Lokasiya: https://maps.google.com/?q=${sale.latitude},${sale.longitude}` 
     : '📍 Lokasiya: Yoxdur';
   
-  const giftText = sale.gift_quantity > 0 ? `\n🎁 Hədiyyə: ${sale.gift_quantity} ədəd` : '';
+  const giftText = sale.gift_quantity > 0 ? `\n🎁 Ümumi Hədiyyə: ${sale.gift_quantity} ədəd` : '';
   const statusEmoji = sale.status === 'delivered' ? '✅ Çatdırıldı' : '⏳ Gözləyir';
   const expertInfo = sale.expert_name ? `✍️ Ekspeditor: ${sale.expert_name}\n` : (sale.expert_id ? `✍️ Ekspeditor ID: ${sale.expert_id}\n` : '');
   const courierInfo = sale.courier_name ? `🚚 Kuryer: ${sale.courier_name}\n` : (sale.courier_id ? `🚚 Kuryer ID: ${sale.courier_id}\n` : '');
 
   let itemsText = '';
   if (sale.items && sale.items.length > 0) {
-    itemsText = sale.items.map(item => `• ${item.name}: ${item.quantity} ədəd`).join('\n');
+    itemsText = sale.items.map(item => `• ${item.name}: ${item.quantity} ədəd${item.gift_quantity ? ` (+${item.gift_quantity} 🎁)` : ''}`).join('\n');
   } else {
     itemsText = `• ${sale.product_name || 'Məhsul'}: ${sale.quantity} ədəd`;
   }

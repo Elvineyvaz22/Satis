@@ -70,6 +70,19 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState<'sales' | 'products' | 'stats' | 'expenses' | 'map'>('sales');
   const [showReceipt, setShowReceipt] = useState(false);
   const [selectedReceipt, setSelectedReceipt] = useState<SaleResult | null>(null);
+  const [showMarketList, setShowMarketList] = useState(false);
+
+  // Unikal marketlər siyahısı (yaddaş)
+  const uniqueMarkets = Array.from(new Map(
+    allSales
+      .filter(s => s.customer_name)
+      .map(s => [s.customer_name.toLowerCase().trim() + (s.customer_phone || ''), { 
+        name: s.customer_name, 
+        phone: s.customer_phone, 
+        lat: s.latitude, 
+        lon: s.longitude 
+      }])
+  ).values()).filter(m => m.name);
 
   // Authorization check
   async function checkAuth(userId: number) {
@@ -94,6 +107,13 @@ export default function Home() {
       setAuthLoading(false);
     }
   }
+
+  // Siyahını bağlamaq üçün click handler
+  useEffect(() => {
+    const handleGlobalClick = () => setShowMarketList(false);
+    document.addEventListener('click', handleGlobalClick);
+    return () => document.removeEventListener('click', handleGlobalClick);
+  }, []);
 
   // Telegram SDK initialization
   useEffect(() => {
@@ -203,6 +223,19 @@ export default function Home() {
     }
   }
 
+  async function deleteExpense(id: number) {
+    if (!confirm('Bu xərci silmək istəyirsiniz?')) return;
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/expenses/${id}`, { method: 'DELETE' });
+      if (res.ok) fetchExpenses();
+    } catch (err) {
+      setError('Silinmədi');
+    } finally {
+      setLoading(false);
+    }
+  }
+
   async function deleteProduct(id: number) {
     if (!confirm('Bu məhsulu silmək istəyirsiniz?')) return;
     try {
@@ -291,7 +324,17 @@ export default function Home() {
     ctx.font = 'bold 16px Courier New';
     let y = 140;
     selectedReceipt.items?.forEach(item => {
-      ctx.fillText(`${item.name} x ${item.quantity}`, 40, y);
+      const itemText = `${item.name} x ${item.quantity}`;
+      ctx.fillText(itemText, 40, y);
+      
+      if (item.gift_quantity && item.gift_quantity > 0) {
+        ctx.fillStyle = 'green';
+        ctx.font = 'italic 12px Courier New';
+        ctx.fillText(` (+${item.gift_quantity}🎁)`, 40 + ctx.measureText(itemText).width + 5, y);
+        ctx.fillStyle = 'black';
+        ctx.font = 'bold 16px Courier New';
+      }
+
       ctx.textAlign = 'right';
       ctx.fillText(`${(item.price * item.quantity).toFixed(2)} ₼`, width - 40, y);
       ctx.textAlign = 'left';
@@ -588,11 +631,12 @@ export default function Home() {
                   <h3 className="text-sm font-bold uppercase tracking-widest text-gray-500">Məhsul Statistikası</h3>
                   {products.map(p => {
                     const count = allSales.reduce((acc, s) => acc + (s.items?.filter(i => i.product_id === p.id).reduce((sum, i) => sum + i.quantity, 0) || 0), 0);
+                    const giftCount = allSales.reduce((acc, s) => acc + (s.items?.filter(i => i.product_id === p.id).reduce((sum, i) => sum + (Number(i.gift_quantity) || 0), 0) || 0), 0);
                     return (
                       <div key={p.id} className="space-y-1">
                         <div className="flex justify-between text-xs font-bold">
                           <span>{p.name}</span>
-                          <span>{count} ədəd</span>
+                          <span>{count} əd {giftCount > 0 && <span className="text-green-500">(+{giftCount}🎁)</span>}</span>
                         </div>
                         <div className="w-full bg-gray-200 h-1.5 rounded-full overflow-hidden">
                           <div className="bg-orange-500 h-full" style={{ width: `${Math.min(100, (count / (allSales.length || 1)) * 20)}%` }}></div>
@@ -615,11 +659,14 @@ export default function Home() {
                 <div className="space-y-3">
                   {expenses.map(e => (
                     <div key={e.id} className={`${cardBg} p-4 rounded-3xl border ${border} flex justify-between items-center`}>
-                      <div>
+                      <div className="flex-1">
                         <p className="font-bold">{e.description}</p>
                         <p className="text-[10px] text-gray-400">{e.date}</p>
                       </div>
-                      <p className="text-sm font-black text-red-500">-{e.amount.toFixed(2)} ₼</p>
+                      <div className="text-right flex items-center space-x-3">
+                        <p className="text-sm font-black text-red-500">-{e.amount.toFixed(2)} ₼</p>
+                        <button onClick={() => deleteExpense(e.id)} className="w-8 h-8 bg-red-100 text-red-500 rounded-full flex items-center justify-center text-xs">✕</button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -781,7 +828,40 @@ export default function Home() {
             )}
 
             <section className={`${cardBg} p-6 rounded-3xl border ${border} shadow-xl space-y-4`}>
-              <input value={customerName} onChange={e => setCustomerName(e.target.value)} placeholder="Müştəri adı" className={`w-full p-4 rounded-2xl ${inputBg} outline-none border-2 border-transparent focus:border-orange-500`} />
+              <div className="relative" onClick={(e) => e.stopPropagation()}>
+                <input 
+                  value={customerName} 
+                  onChange={e => { setCustomerName(e.target.value); setShowMarketList(true); }} 
+                  onFocus={() => setShowMarketList(true)}
+                  autoComplete="off"
+                  placeholder="Müştəri adı" 
+                  className={`w-full p-4 rounded-2xl ${inputBg} outline-none border-2 border-transparent focus:border-orange-500`} 
+                />
+                {showMarketList && uniqueMarkets.filter(m => m.name.toLowerCase().includes(customerName.toLowerCase())).length > 0 && (
+                  <div className={`absolute z-[100] left-0 right-0 mt-2 ${cardBg} border ${border} rounded-2xl shadow-2xl max-h-64 overflow-y-auto overflow-x-hidden`}>
+                    <div className="p-2 border-b border-black/5 text-[9px] font-bold text-gray-400 uppercase tracking-widest">Yaddaşdan seçin:</div>
+                    {uniqueMarkets.filter(m => m.name.toLowerCase().includes(customerName.toLowerCase())).map((m, idx) => (
+                      <div 
+                        key={idx} 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setCustomerName(m.name);
+                          setCustomerPhone(m.phone || '');
+                          if (m.lat && m.lon) setLocation({ lat: m.lat, lon: m.lon });
+                          setShowMarketList(false);
+                        }}
+                        className="p-4 border-b border-black/5 last:border-0 active:bg-orange-500 active:text-white cursor-pointer hover:bg-black/5"
+                      >
+                        <p className="font-bold text-sm text-orange-500">{m.name}</p>
+                        <div className="flex justify-between items-center mt-1">
+                          <p className="text-[10px] opacity-60 font-mono">{m.phone || 'Nömrə yoxdur'}</p>
+                          {m.lat && <span className="text-[10px] bg-green-500/10 text-green-500 px-2 py-0.5 rounded-full font-bold">📍 Lokasiya var</span>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
               <input value={customerPhone} onChange={e => setCustomerPhone(e.target.value)} placeholder="Telefon" className={`w-full p-4 rounded-2xl ${inputBg} outline-none border-2 border-transparent focus:border-orange-500`} />
               <button onClick={getLocation} className={`w-full p-4 rounded-2xl ${inputBg} text-sm font-bold text-gray-400 border-2 border-dashed ${border}`}>
                 {locationLoading ? '🔄 Məkan axtarılır...' : location ? `📍 ${location.lat.toFixed(4)}, ${location.lon.toFixed(4)}` : '📍 Lokasiya Əlavə Et'}
