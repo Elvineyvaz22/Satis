@@ -68,26 +68,26 @@ export default function Home() {
   const [newProductPrice, setNewProductPrice] = useState('');
   const [newExpDesc, setNewExpDesc] = useState('');
   const [newExpAmount, setNewExpAmount] = useState('');
-  const [activeTab, setActiveTab] = useState<'sales' | 'products' | 'stats' | 'expenses' | 'map'>('sales');
+  const [activeTab, setActiveTab] = useState<'sales' | 'products' | 'stats' | 'expenses' | 'map' | 'customers'>('sales');
   const [showReceipt, setShowReceipt] = useState(false);
   const [selectedReceipt, setSelectedReceipt] = useState<SaleResult | null>(null);
   const [showMarketList, setShowMarketList] = useState(false);
+  const [customers, setCustomers] = useState<any[]>([]);
+  const [newCustName, setNewCustName] = useState('');
+  const [newCustPhone, setNewCustPhone] = useState('');
 
   const [editingExpenseId, setEditingExpenseId] = useState<number | null>(null);
   const [editExpDesc, setEditExpDesc] = useState('');
   const [editExpAmount, setEditExpAmount] = useState('');
 
   // Unikal marketlər siyahısı (yaddaş)
+  const dbMarkets = customers.map(c => ({ name: c.name, phone: c.phone, lat: c.lat, lon: c.lon }));
+  const salesMarkets = allSales.filter(s => s.customer_name).map(s => ({ name: s.customer_name, phone: s.customer_phone, lat: s.latitude, lon: s.longitude }));
   const uniqueMarkets = Array.from(new Map(
-    allSales
-      .filter(s => s.customer_name)
-      .map(s => [s.customer_name.toLowerCase().trim() + (s.customer_phone || ''), { 
-        name: s.customer_name, 
-        phone: s.customer_phone, 
-        lat: s.latitude, 
-        lon: s.longitude 
-      }])
-  ).values()).filter(m => m.name);
+    [...dbMarkets, ...salesMarkets]
+      .filter(m => m.name)
+      .map(m => [m.name.toLowerCase().trim() + (m.phone || ''), m])
+  ).values());
 
   // Authorization check
   async function checkAuth(userId: number) {
@@ -151,6 +151,7 @@ export default function Home() {
     if (sdkReady && isAuthorized) {
       setDate(new Date().toISOString().split('T')[0]);
       fetchProducts();
+      fetchCustomers();
       if (role === 'admin' || role === 'courier' || role === 'expeditor') fetchAllSales();
       if (role === 'admin') fetchExpenses();
     }
@@ -180,9 +181,50 @@ export default function Home() {
     try {
       const res = await fetch('/api/expenses');
       const data = await res.json();
-      setExpenses(data);
+      setExpenses(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  async function fetchCustomers() {
+    try {
+      const res = await fetch('/api/customers');
+      const data = await res.json();
+      setCustomers(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  async function addCustomer() {
+    if (!newCustName || !newCustPhone) return;
+    setLoading(true);
+    try {
+      const res = await fetch('/api/customers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newCustName, phone: newCustPhone })
+      });
+      if (res.ok) {
+        setNewCustName('');
+        setNewCustPhone('');
+        fetchCustomers();
+      }
     } catch {
-      setError('Xərclər yüklənə bilmədi');
+      setError('Müştəri əlavə edilmədi');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function deleteCustomer(id: number) {
+    if (!confirm('Bu müştərini silmək istəyirsiniz?')) return;
+    try {
+      await fetch(`/api/customers/${id}`, { method: 'DELETE' });
+      fetchCustomers();
+    } catch {
+      setError('Müştəri silinmədi');
     }
   }
 
@@ -608,6 +650,7 @@ export default function Home() {
               <button onClick={() => setActiveTab('products')} className={`flex-none px-4 py-2 rounded-xl font-bold text-xs ${activeTab === 'products' ? 'bg-orange-500 text-white shadow-md' : 'text-gray-400'}`}>Məhsullar</button>
               <button onClick={() => setActiveTab('stats')} className={`flex-none px-4 py-2 rounded-xl font-bold text-xs ${activeTab === 'stats' ? 'bg-orange-500 text-white shadow-md' : 'text-gray-400'}`}>Statistika</button>
               <button onClick={() => setActiveTab('expenses')} className={`flex-none px-4 py-2 rounded-xl font-bold text-xs ${activeTab === 'expenses' ? 'bg-orange-500 text-white shadow-md' : 'text-gray-400'}`}>Xərclər</button>
+              <button onClick={() => setActiveTab('customers')} className={`flex-none px-4 py-2 rounded-xl font-bold text-xs ${activeTab === 'customers' ? 'bg-orange-500 text-white shadow-md' : 'text-gray-400'}`}>Müştərilər</button>
             </div>
 
             {activeTab === 'sales' && (
@@ -750,6 +793,36 @@ export default function Home() {
                       )}
                     </div>
                   ))}
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'customers' && (
+              <div className="space-y-6">
+                <div className={`${cardBg} p-5 rounded-3xl border ${border} space-y-3`}>
+                  <h3 className="font-bold text-sm">Yeni Müştəri</h3>
+                  <input type="text" placeholder="Müştəri/Market Adı" value={newCustName} onChange={e => setNewCustName(e.target.value)} className={`w-full p-3 rounded-xl ${inputBg} border-2 border-transparent focus:border-orange-500`} />
+                  <input type="tel" placeholder="Nömrə (məs: 0501234567)" value={newCustPhone} onChange={e => setNewCustPhone(e.target.value)} className={`w-full p-3 rounded-xl ${inputBg} border-2 border-transparent focus:border-orange-500`} />
+                  <button onClick={addCustomer} disabled={loading} className="w-full bg-orange-500 text-white py-3 rounded-xl font-bold text-sm active:scale-95 disabled:opacity-50">Müştəri Əlavə Et</button>
+                </div>
+                
+                <div className="space-y-3">
+                  <h3 className="text-sm font-bold uppercase tracking-widest text-gray-500">Müştəri Bazası</h3>
+                  {uniqueMarkets.map((m, idx) => {
+                    const isManual = customers.some(c => c.name === m.name && c.phone === m.phone);
+                    const custId = isManual ? customers.find(c => c.name === m.name && c.phone === m.phone)?.id : null;
+                    return (
+                      <div key={idx} className={`${cardBg} p-4 rounded-3xl border ${border} flex justify-between items-center`}>
+                        <div>
+                          <p className="font-bold">{m.name}</p>
+                          <p className="text-xs text-gray-400">{m.phone || 'Nömrə yoxdur'}</p>
+                        </div>
+                        {isManual && custId && (
+                          <button onClick={() => deleteCustomer(custId)} className="w-8 h-8 bg-red-100 text-red-500 rounded-full flex items-center justify-center text-xs active:scale-95">✕</button>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}

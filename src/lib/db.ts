@@ -9,6 +9,7 @@ export const redis = new Redis({
 export const PRODUCTS_KEY = 'products';
 export const SALES_KEY = 'sales';
 export const EXPENSES_KEY = 'expenses';
+export const CUSTOMERS_KEY = 'customers';
 export const SALE_ID_COUNTER = 'sale_id_counter';
 
 export interface Product {
@@ -23,6 +24,15 @@ export interface Expense {
   description: string;
   amount: number;
   date: string;
+  created_at: string;
+}
+
+export interface Customer {
+  id: number;
+  name: string;
+  phone: string;
+  lat?: number | null;
+  lon?: number | null;
   created_at: string;
 }
 
@@ -85,6 +95,10 @@ const db = {
           }
           if (query.includes('FROM expenses')) {
             const data = await redis.get<string>(EXPENSES_KEY);
+            return data && typeof data === 'string' ? JSON.parse(data) : (Array.isArray(data) ? data : []);
+          }
+          if (query.includes('FROM customers')) {
+            const data = await redis.get<string>(CUSTOMERS_KEY);
             return data && typeof data === 'string' ? JSON.parse(data) : (Array.isArray(data) ? data : []);
           }
           return [];
@@ -200,6 +214,23 @@ const db = {
             return { lastInsertRowid: newExpense.id, changes: 1 };
           }
           
+          if (query.includes('INSERT INTO customers')) {
+            const [name, phone, lat, lon] = args;
+            const customersJson = await redis.get<string>(CUSTOMERS_KEY);
+            let customers: Customer[] = customersJson && typeof customersJson === 'string' ? JSON.parse(customersJson) : (Array.isArray(customersJson) ? customersJson : []);
+            const newCustomer: Customer = {
+              id: Date.now(),
+              name,
+              phone,
+              lat,
+              lon,
+              created_at: new Date().toISOString()
+            };
+            customers.unshift(newCustomer);
+            await redis.set(CUSTOMERS_KEY, JSON.stringify(customers));
+            return { lastInsertRowid: newCustomer.id, changes: 1 };
+          }
+          
           if (query.includes('DELETE FROM sales')) {
             const [id] = args;
             const salesJson = await redis.get<string>(SALES_KEY);
@@ -223,6 +254,16 @@ const db = {
               await redis.set(PRODUCTS_KEY, JSON.stringify(products));
               return { lastInsertRowid: 0, changes: 1 };
             }
+          }
+          
+          if (query.includes('DELETE FROM customers WHERE id = ?')) {
+            const [id] = args;
+            const customersJson = await redis.get<string>(CUSTOMERS_KEY);
+            let customers: Customer[] = customersJson && typeof customersJson === 'string' ? JSON.parse(customersJson) : (Array.isArray(customersJson) ? customersJson : []);
+            const initialLength = customers.length;
+            customers = customers.filter(c => c.id !== Number(id));
+            await redis.set(CUSTOMERS_KEY, JSON.stringify(customers));
+            return { lastInsertRowid: 0, changes: initialLength !== customers.length ? 1 : 0 };
           }
 
           if (query.includes('DELETE FROM expenses')) {
