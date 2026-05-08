@@ -131,15 +131,18 @@ export default function Home() {
         const userId = tg.initDataUnsafe?.user?.id;
         if (userId) checkAuth(userId);
         else {
-          setRole('admin');
-          setIsActualAdmin(true);
-          setIsAuthorized(true);
+          setIsAuthorized(false);
           setAuthLoading(false);
         }
       } else {
-        setRole('admin');
-        setIsActualAdmin(true);
-        setIsAuthorized(true);
+        // Dev fallback - only for localhost
+        if (window.location.hostname === 'localhost') {
+          setRole('admin');
+          setIsActualAdmin(true);
+          setIsAuthorized(true);
+        } else {
+          setIsAuthorized(false);
+        }
         setAuthLoading(false);
       }
       setSdkReady(true);
