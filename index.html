@@ -101,6 +101,30 @@
     .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
     #result-view { display: none; }
     #form-view { display: block; }
+    
+    /* Market List Styles */
+    .market-list {
+      position: absolute;
+      z-index: 1000;
+      left: 0; right: 0;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      margin-top: 4px;
+      max-height: 200px;
+      overflow-y: auto;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+      display: none;
+    }
+    .market-item {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      cursor: pointer;
+    }
+    .market-item:last-child { border-bottom: none; }
+    .market-item:hover { background: rgba(255,149,0,0.1); }
+    .market-name { font-weight: 700; font-size: 14px; color: #ff9500; }
+    .market-info { font-size: 10px; opacity: 0.5; margin-top: 2px; }
   </style>
 </head>
 <body class="light">
@@ -121,9 +145,10 @@
     <div class="divider"></div>
     <div class="section-title">Müştəri Məlumatları</div>
 
-    <div class="form-group">
+    <div class="form-group" style="position:relative;">
       <label class="form-label">Müştərinin Adı *</label>
-      <input type="text" id="customer-name" class="form-input" placeholder="Məsələn: Kral Dönər">
+      <input type="text" id="customer-name" class="form-input" placeholder="Məsələn: Kral Dönər" oninput="searchMarkets()" onfocus="searchMarkets()" autocomplete="off">
+      <div id="market-list" class="market-list"></div>
     </div>
 
     <div class="form-group">
@@ -198,7 +223,15 @@
   <script>
     const tg = window.Telegram?.WebApp;
     let products = [];
+    let allSales = [];
     let location = null;
+
+    // Market yaddaşı üçün klikləri izlə
+    document.addEventListener('click', (e) => {
+      if (e.target.id !== 'customer-name') {
+        document.getElementById('market-list').style.display = 'none';
+      }
+    });
 
     // Dark mode
     if (tg?.colorScheme === 'dark') {
@@ -213,7 +246,56 @@
       }
       document.getElementById('date-input').value = new Date().toISOString().split('T')[0];
       fetchProducts();
+      fetchSales();
     });
+
+    async function fetchSales() {
+      try {
+        const res = await fetch('/api/sales');
+        allSales = await res.json();
+      } catch (err) {}
+    }
+
+    function searchMarkets() {
+      const val = document.getElementById('customer-name').value.toLowerCase();
+      const list = document.getElementById('market-list');
+      
+      // Unikal marketləri çıxar
+      const uniqueMarkets = Array.from(new Map(
+        allSales
+          .filter(s => s.customer_name)
+          .map(s => [s.customer_name.toLowerCase().trim() + (s.customer_phone || ''), {
+            name: s.customer_name,
+            phone: s.customer_phone,
+            lat: s.latitude,
+            lon: s.longitude
+          }])
+      ).values());
+
+      const filtered = uniqueMarkets.filter(m => m.name.toLowerCase().includes(val));
+
+      if (filtered.length > 0) {
+        list.style.display = 'block';
+        list.innerHTML = filtered.map(m => `
+          <div class="market-item" onclick="selectMarket('${m.name}', '${m.phone || ''}', ${m.lat}, ${m.lon})">
+            <div class="market-name">${m.name}</div>
+            <div class="market-info">${m.phone || 'Nömrə yoxdur'} ${m.lat ? '📍' : ''}</div>
+          </div>
+        `).join('');
+      } else {
+        list.style.display = 'none';
+      }
+    }
+
+    function selectMarket(name, phone, lat, lon) {
+      document.getElementById('customer-name').value = name;
+      document.getElementById('customer-phone').value = phone;
+      if (lat && lon) {
+        location = { lat, lon };
+        finishLocation();
+      }
+      document.getElementById('market-list').style.display = 'none';
+    }
 
     async function fetchProducts() {
       try {

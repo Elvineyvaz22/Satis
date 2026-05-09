@@ -127,6 +127,7 @@
     <button class="tab active" onclick="showTab('products')">📦 Məhsullar</button>
     <button class="tab" onclick="showTab('add-product')">➕ Yeni Məhsul</button>
     <button class="tab" onclick="showTab('sales')">📊 Satışlar</button>
+    <button class="tab" onclick="showTab('expenses')">💸 Xərclər</button>
     <button class="tab" onclick="showTab('stats')">📈 Statistik</button>
   </div>
 
@@ -161,6 +162,24 @@
     <div id="stats-content"></div>
   </div>
 
+  <div id="expenses-tab" class="card">
+    <div class="card-title">💸 Xərclər İdarəetməsi</div>
+    <div id="expense-msg"></div>
+    <div class="form-group">
+      <label class="form-label">Xərcin təsviri</label>
+      <input type="text" id="exp-desc" class="form-input" placeholder="Məsələn: Yanacaq">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Məbləğ (₼)</label>
+      <input type="number" id="exp-amount" class="form-input" placeholder="10.00" step="0.01">
+    </div>
+    <button id="add-exp-btn" class="btn btn-danger" style="margin-bottom:20px" onclick="addExpense()">
+      💸 Xərci Yaz
+    </button>
+    <div class="divider"></div>
+    <div id="expenses-list"></div>
+  </div>
+
   <script>
     const isDark = false;
     document.body.classList.toggle('dark', isDark);
@@ -188,6 +207,7 @@
       document.getElementById(`${tab}-tab`).classList.add('active');
       event.target.classList.add('active');
       if (tab === 'stats') loadStats();
+      if (tab === 'expenses') loadExpenses();
     }
 
     function showMsg(id, msg, type) {
@@ -201,6 +221,7 @@
     async function loadAllData() {
       loadProducts();
       loadSales();
+      loadExpenses();
     }
 
     async function loadProducts() {
@@ -309,44 +330,80 @@
       });
     }
 
-    async function loadStats() {
-      const statsDiv = document.getElementById('stats-content');
-      if (sales.length === 0) {
-        statsDiv.innerHTML = '<div class="empty">Satış məlumatı yoxdur</div>';
+    async function loadExpenses() {
+      try {
+        const res = await fetch(`${API_BASE}/api/expenses`);
+        expenses = await res.json();
+        renderExpenses();
+      } catch (err) {
+        document.getElementById('expenses-list').innerHTML = '<div class="empty">Xərclər yüklənə bilmədi</div>';
+      }
+    }
+
+    function renderExpenses() {
+      const list = document.getElementById('expenses-list');
+      if (expenses.length === 0) {
+        list.innerHTML = '<div class="empty">Xərc yoxdur</div>';
         return;
       }
-      
-      const totalSales = sales.length;
-      const totalAmount = sales.reduce((sum, s) => sum + s.total_amount, 0);
-      const today = new Date().toISOString().split('T')[0];
-      const todaySales = sales.filter(s => s.date === today);
-      const todayAmount = todaySales.reduce((sum, s) => sum + s.total_amount, 0);
-      const totalQty = sales.reduce((sum, s) => sum + s.quantity, 0);
-      
-      statsDiv.innerHTML = `
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-          <div class="product-item" style="text-align:center">
-            <div style="font-size:28px;font-weight:700;color:#ff9500">${totalSales}</div>
-            <div style="font-size:12px;opacity:0.6">Ümumi Satış</div>
+      list.innerHTML = expenses.map(e => `
+        <div class="product-item">
+          <div class="product-info">
+            <div class="product-name">${e.description}</div>
+            <div class="product-price">${e.amount.toFixed(2)} ₼ • ${e.date}</div>
           </div>
-          <div class="product-item" style="text-align:center">
-            <div style="font-size:28px;font-weight:700;color:#34c759">${totalAmount.toFixed(2)} ₼</div>
-            <div style="font-size:12px;opacity:0.6">Ümumi Gəlir</div>
-          </div>
-          <div class="product-item" style="text-align:center">
-            <div style="font-size:28px;font-weight:700;color:#007aff">${todaySales.length}</div>
-            <div style="font-size:12px;opacity:0.6">Bu Günün Satışı</div>
-          </div>
-          <div class="product-item" style="text-align:center">
-            <div style="font-size:28px;font-weight:700;color:#ff3b30">${todayAmount.toFixed(2)} ₼</div>
-            <div style="font-size:12px;opacity:0.6">Bu Günün Gəliri</div>
+          <div class="product-actions">
+            <button class="delete-btn" onclick="deleteExpense(${e.id})">🗑️ Sil</button>
           </div>
         </div>
-        <div class="product-item" style="margin-top:12px;text-align:center">
-          <div style="font-size:24px;font-weight:700">${totalQty} ədəd</div>
-          <div style="font-size:12px;opacity:0.6">Ümumi Satılan Məhsul</div>
-        </div>
-      `;
+      `).join('');
+    }
+
+    async function addExpense() {
+      const description = document.getElementById('exp-desc').value.trim();
+      const amount = parseFloat(document.getElementById('exp-amount').value);
+      const date = new Date().toISOString().split('T')[0];
+
+      if (!description || !amount) {
+        showMsg('expense-msg', 'Bütün sahələri doldurun!', 'error');
+        return;
+      }
+
+      const btn = document.getElementById('add-exp-btn');
+      btn.disabled = true;
+      btn.innerHTML = '<div class="spinner"></div>';
+
+      try {
+        const res = await fetch(`${API_BASE}/api/expenses`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ description, amount, date })
+        });
+        
+        if (res.ok) {
+          showMsg('expense-msg', 'Xərc uğurla əlavə edildi!', 'success');
+          document.getElementById('exp-desc').value = '';
+          document.getElementById('exp-amount').value = '';
+          loadExpenses();
+        } else {
+          showMsg('expense-msg', 'Xəta baş verdi', 'error');
+        }
+      } catch (err) {
+        showMsg('expense-msg', 'Bağlantı xətası', 'error');
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '💸 Xərci Yaz';
+      }
+    }
+
+    async function deleteExpense(id) {
+      if (!confirm('Bu xərci silmək istəyirsiniz?')) return;
+      try {
+        await fetch(`${API_BASE}/api/expenses/${id}`, { method: 'DELETE' });
+        loadExpenses();
+      } catch (err) {
+        alert('Xəta baş verdi');
+      }
     }
 
     // Load data
