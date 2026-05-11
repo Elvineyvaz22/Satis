@@ -1,6 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { redis, PRODUCTS_KEY } from '@/lib/db';
 
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const { id } = params;
+    const numId = parseInt(id);
+    const body = await request.json();
+    const productsJson = await redis.get<string>(PRODUCTS_KEY);
+    let products: any[] = productsJson
+      ? (typeof productsJson === 'string' ? JSON.parse(productsJson) : productsJson)
+      : [];
+    const idx = products.findIndex((p: any) => p.id === numId);
+    if (idx === -1) return NextResponse.json({ error: 'Məhsul tapılmadı' }, { status: 404 });
+    products[idx] = { ...products[idx], ...body };
+    await redis.set(PRODUCTS_KEY, JSON.stringify(products));
+    return NextResponse.json(products[idx]);
+  } catch {
+    return NextResponse.json({ error: 'Xəta baş verdi' }, { status: 500 });
+  }
+}
+
 export async function DELETE(
   request: NextRequest,
   { params }: { params: { id: string } }

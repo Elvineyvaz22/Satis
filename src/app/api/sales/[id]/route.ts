@@ -35,7 +35,7 @@ export async function PATCH(
   try {
     const { id } = params;
     const body = await request.json();
-    const { status, payment_status, userId, userName } = body;
+    const { status, payment_status, userId, userName, paid_amount, items, total_amount, customer_name, customer_phone, date } = body;
 
     if (status) {
       if (!['pending', 'delivered'].includes(status)) {
@@ -51,7 +51,22 @@ export async function PATCH(
       await (db.prepare('UPDATE sales SET payment_status = ? WHERE id = ?') as any).run(payment_status, id);
     }
 
-    if (!status && !payment_status) {
+    if (paid_amount !== undefined) {
+      const amount = parseFloat(String(paid_amount));
+      if (isNaN(amount) || amount < 0) {
+        return NextResponse.json({ error: 'Düzgün məbləğ göndərin' }, { status: 400 });
+      }
+      await (db.prepare('UPDATE sales SET paid_amount = ? WHERE id = ?') as any).run(amount, id);
+    }
+
+    if (items !== undefined || total_amount !== undefined) {
+      if (items !== undefined && (!Array.isArray(items) || items.length === 0)) {
+        return NextResponse.json({ error: 'Məhsul siyahısı boş ola bilməz' }, { status: 400 });
+      }
+      await (db.prepare('UPDATE sales SET items WHERE id = ?') as any).run(items, total_amount, customer_name, customer_phone, date, id);
+    }
+
+    if (!status && !payment_status && paid_amount === undefined && items === undefined && total_amount === undefined) {
        return NextResponse.json({ error: 'Heç nə dəyişdirilmədi' }, { status: 400 });
     }
 

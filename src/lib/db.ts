@@ -58,6 +58,8 @@ export interface Sale {
   courier_id?: number;
   expert_name?: string;
   courier_name?: string;
+  paid_amount?: number;
+  payment_updated_at?: string;
   items?: {
     product_id: number;
     name: string;
@@ -198,6 +200,34 @@ const db = {
             return { lastInsertRowid: 0, changes: 0 };
           }
 
+          if (query.includes('UPDATE sales SET paid_amount = ? WHERE id = ?')) {
+            const [paid_amount, id] = args;
+            const salesJson = await redis.get<string>(SALES_KEY);
+            let sales: Sale[] = salesJson && typeof salesJson === 'string' ? JSON.parse(salesJson) : (Array.isArray(salesJson) ? salesJson : []);
+            const idx = sales.findIndex(s => s.id === Number(id));
+            if (idx !== -1) {
+              sales[idx].paid_amount = Number(paid_amount);
+              sales[idx].payment_status = Number(paid_amount) >= sales[idx].total_amount ? 'paid' : 'unpaid';
+              await redis.set(SALES_KEY, JSON.stringify(sales));
+              return { lastInsertRowid: 0, changes: 1 };
+            }
+            return { lastInsertRowid: 0, changes: 0 };
+          }
+
+          if (query.includes('UPDATE sales SET items = ? WHERE id = ?')) {
+            const [items, id] = args;
+            const salesJson = await redis.get<string>(SALES_KEY);
+            let sales: Sale[] = salesJson && typeof salesJson === 'string' ? JSON.parse(salesJson) : (Array.isArray(salesJson) ? salesJson : []);
+            const idx = sales.findIndex(s => s.id === Number(id));
+            if (idx !== -1) {
+              sales[idx].items = items;
+              sales[idx].total_amount = items.reduce((acc: number, item: any) => acc + (item.price * item.quantity), 0);
+              await redis.set(SALES_KEY, JSON.stringify(sales));
+              return { lastInsertRowid: 0, changes: 1 };
+            }
+            return { lastInsertRowid: 0, changes: 0 };
+          }
+
           if (query.includes('INSERT INTO expenses')) {
             const [description, amount, date] = args;
             const expensesJson = await redis.get<string>(EXPENSES_KEY);
@@ -303,6 +333,38 @@ const db = {
             products.push(newProduct);
             await redis.set(PRODUCTS_KEY, JSON.stringify(products));
             return { lastInsertRowid: newId, changes: 1 };
+          }
+
+          if (query.includes('UPDATE sales SET paid_amount')) {
+            const [paid_amount, id] = args;
+            const salesJson = await redis.get<string>(SALES_KEY);
+            let sales: Sale[] = salesJson && typeof salesJson === 'string' ? JSON.parse(salesJson) : (Array.isArray(salesJson) ? salesJson : []);
+            const idx = sales.findIndex(s => s.id === Number(id));
+            if (idx !== -1) {
+              sales[idx].paid_amount = Number(paid_amount);
+              sales[idx].payment_updated_at = new Date().toISOString();
+              sales[idx].payment_status = Number(paid_amount) >= sales[idx].total_amount ? 'paid' : 'unpaid';
+              await redis.set(SALES_KEY, JSON.stringify(sales));
+              return { lastInsertRowid: 0, changes: 1 };
+            }
+            return { lastInsertRowid: 0, changes: 0 };
+          }
+
+          if (query.includes('UPDATE sales SET items')) {
+            const [items, total_amount, customer_name, customer_phone, date, id] = args;
+            const salesJson = await redis.get<string>(SALES_KEY);
+            let sales: Sale[] = salesJson && typeof salesJson === 'string' ? JSON.parse(salesJson) : (Array.isArray(salesJson) ? salesJson : []);
+            const idx = sales.findIndex(s => s.id === Number(id));
+            if (idx !== -1) {
+              if (items !== undefined) sales[idx].items = items;
+              if (total_amount !== undefined) sales[idx].total_amount = total_amount;
+              if (customer_name !== undefined) sales[idx].customer_name = customer_name;
+              if (customer_phone !== undefined) sales[idx].customer_phone = customer_phone;
+              if (date !== undefined) sales[idx].date = date;
+              await redis.set(SALES_KEY, JSON.stringify(sales));
+              return { lastInsertRowid: 0, changes: 1 };
+            }
+            return { lastInsertRowid: 0, changes: 0 };
           }
           
           return { lastInsertRowid: 0, changes: 0 };
